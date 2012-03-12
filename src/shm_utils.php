@@ -654,7 +654,7 @@ class phpMorphy_Shm_Cache implements phpMorphy_Shm_Cache_Interface {
         
         if(false === ($handle = @shmop_open($segmentId, 'w', 0, 0))) {
             if(false === ($handle = shmop_open($segmentId, 'n', self::DEFAULT_MODE, $size))) {
-                throw new phpMorphy_Exception("Can`t create SHM segment with '$id' id and $size size");
+                throw new phpMorphy_Exception("Can`t create SHM segment with '$segmentId' id and $size size");
             }
             
             $new = true;

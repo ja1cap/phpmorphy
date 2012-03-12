@@ -1,3 +1,7 @@
+Changes with phpMorphy 0.3.4                                     23 Aug 2009
+    *) Fix bug in phpMorphy_WordForm::hasGrammems($grammems) when $grammems not array
+    *) Fix bug in phpMorphy_Shm_Cache::openSegement(), throws exception with invalid  message
+    *) Add missing files for generating dictionaries (/utils directory)
 Changes with phpMorphy 0.3.3                                     15 Aug 2009
     *) Fix phpMorphy_Fsa::collect() in sparse mode
     *) New methods in morphiers for access to Fsa_Interface from Finder, Morphier

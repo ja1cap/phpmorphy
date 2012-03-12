@@ -26,6 +26,6 @@ try {
         ";\n"
     );
 } catch (Exception $e) {
-    echo 'ERROR: ' . $e->getMessage();
+    echo $e;
     exit(1);
 }

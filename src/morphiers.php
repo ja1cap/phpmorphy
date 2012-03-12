@@ -541,6 +541,8 @@ class phpMorphy_WordForm {
     }
     
     function hasGrammems($grammems) {
+        $grammems = (array)$grammems;
+
         $grammes_count = count($grammems);
         return $grammes_count && count(array_intersect($grammems, $this->grammems)) == $grammes_count;
     }
@@ -693,7 +695,7 @@ class phpMorphy_WordDescriptor implements Countable, ArrayAccess, IteratorAggreg
         return $result;
 //        return count($result) ? $result : false;
     }
-    
+
     function hasPartOfSpeech($poses) {
         settype($poses, 'array');
         
