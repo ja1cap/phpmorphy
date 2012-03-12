@@ -35,7 +35,7 @@ This library allow retireve follow morph information for any word:
 
 Note: 
   All values are words per second speed.
-  Test platform: PHP 5.1.2, AMD Duron 800 with 512Mb memory, WinXP
+  Test platform: PHP 5.2.3, AMD Duron 800 with 512Mb memory, WinXP
 
 ------------ INSTALLATION -------------
  See INSTALL file in current directory

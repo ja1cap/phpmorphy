@@ -20,36 +20,77 @@
  * Boston, MA 02111-1307, USA.
  */
 
-define('PHPMORPHY_GRAMINFO_HEADER_SIZE', 128);
+interface phpMorphy_IGramInfo {
+	/**
+	 * Returns langugage for graminfo file
+	 * @return string
+	 */
+	function getLanguage();
+	
+	/**
+	 * Return codepage(encoding) for graminfo file
+	 * @return string
+	 */
+	function getCodepage();
+	
+	/**
+	 * Reads graminfo header
+	 *
+	 * @param int $offset
+	 * @return array
+	 */
+	function readGramInfoHeader($offset);
+	
+	/**
+	 * Read ancodes section for header retrieved with readGramInfoHeader
+	 *
+	 * @param array $info
+	 * @return array
+	 */
+	function readAncodes($info);
+	
+	/**
+	 * Read flexias section for header retrieved with readGramInfoHeader
+	 *
+	 * @param array $info
+	 * @param bool $onlyBase when TRUE then only base(first) form flexia returned
+	 * @return array
+	 */
+	function readFlexiaData($info, $onlyBase);
+	
+	/**
+	 * Read all graminfo headers offsets, which can be used latter for readGramInfoHeader method
+	 * @return array
+	 */
+	function readAllGramInfoOffsets();
+}
  
-class phpMorphy_GramInfo {
+abstract class phpMorphy_GramInfo implements phpMorphy_IGramInfo {
+	const HEADER_SIZE = 128;
+	
 	var $resource;
 	var $header;
 	
-	// private ctor
-	function phpMorphy_GramInfo($resource, $header) {
+	protected function phpMorphy_GramInfo($resource, $header) {
 		$this->resource = $resource;
 		$this->header = $header;
 	}
 	
-	// static
-	function &create(&$storage) {
-		$header = phpMorphy_GramInfo::_readHeader(
-			$storage->read(0, PHPMORPHY_GRAMINFO_HEADER_SIZE)
+	static function create(phpMorphy_Storage $storage) {
+		$header = phpMorphy_GramInfo::readHeader(
+			$storage->read(0, self::HEADER_SIZE)
 		);
 		
-		if(!phpMorphy_GramInfo::_validateHeader($header)) {
-			return php_morphy_error("Invalid graminfo format");
+		if(!phpMorphy_GramInfo::validateHeader($header)) {
+			throw new phpMorphy_Exception('Invalid graminfo format');
 		}
 		
-		$storage_type = phpMorphy_GramInfo::_getStorageString($storage->getType());
+		$storage_type = phpMorphy_GramInfo::getStorageString($storage->getType());
 		$file_path = dirname(__FILE__) . "/access/graminfo_{$storage_type}.php";
 		$clazz = 'phpMorphy_GramInfo_' . ucfirst($storage_type);
 		
 		require_once($file_path);
-		$obj =& new $clazz($storage->getResource(), $header);
-		
-		return $obj;
+		return new $clazz($storage->getResource(), $header);
 	}
 	
 	function getLanguage() {
@@ -60,13 +101,7 @@ class phpMorphy_GramInfo {
 		return $this->header['codepage'];
 	}
 	
-	// abstract
-	function readGramInfoHeader($offset) { }
-	function readAncodes($info) { }
-	function readFlexiaData($info, $onlyBase) { }
-	function readAllGramInfoOffsets() { }
-	
-	function _readHeader($headerRaw) {
+	static protected function readHeader($headerRaw) {
 		$header = unpack(
 			'Vver/Vis_be/Vflex_count/Vflex_offset/Vflex_size',
 			$headerRaw
@@ -82,7 +117,7 @@ class phpMorphy_GramInfo {
 		return $header;
 	}
 	
-	function _validateHeader($header) {
+	static protected function validateHeader($header) {
 		if(
 			2 != $header['ver'] &&
 			0 == $header['is_be']
@@ -93,7 +128,7 @@ class phpMorphy_GramInfo {
 		return true;
 	}
 	
-	function _getStorageString($type) {
+	static protected function getStorageString($type) {
 		$types_map = array(
 			PHPMORPHY_STORAGE_FILE => 'file',
 			PHPMORPHY_STORAGE_MEM => 'mem',
@@ -101,18 +136,18 @@ class phpMorphy_GramInfo {
 		);
 		
 		if(!isset($types_map[$type])) {
-			return php_morphy_error('Unsupported storage type ' . $storage->getType());
+			throw new phpMorphy_Exception('Unsupported storage type ' . $storage->getType());
 		}
 		
 		return $types_map[$type];
 	}
 };
 
-class phpMorphy_GramInfo_Decorator {
+class phpMorphy_GramInfo_Decorator implements phpMorphy_IGramInfo {
 	var $info;
 	
-	function phpMorphy_GramInfo_Decorator(&$info) {
-		$this->info =& $info;
+	function phpMorphy_GramInfo_Decorator(phpMorphy_IGramInfo $info) {
+		$this->info = $info;
 	}
 	
 	function readGramInfoHeader($offset) { return $this->info->readGramInfoHeader($offset); }

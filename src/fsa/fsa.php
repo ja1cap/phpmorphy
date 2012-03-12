@@ -20,31 +20,97 @@
  * Boston, MA 02111-1307, USA.
  */
 
-define('PHPMORPHY_FSA_HEADER_SIZE', 60);
+interface phpMorphy_IFsa {
+	/**
+	 * Return root transition of fsa
+	 * @return array
+	 */
+	function getRootTrans();
+	
+	/**
+	 * Returns root state object
+	 * @return
+	 */
+	function getRootState();
+	
+	/**
+	 * Returns alphabet i.e. all chars used in automat
+	 * @return array
+	 */
+	function getAlphabet();
+	
+	/**
+	 * Return annotation for given transition(if annotation flag is set for given trans)
+	 *
+	 * @param array $trans
+	 * @return string
+	 */
+	function getAnnot($trans);
+	
+	/**
+	 * Find word in automat
+	 *
+	 * @param mixed $trans starting transition
+	 * @param string $word
+	 * @param bool $readAnnot read annot or simple check if word exists in automat
+	 * @return bool TRUE if word is found, FALSE otherwise
+	 */
+	function walk($trans, $word, $readAnnot = true);
+	
+	/**
+	 * Traverse automat and collect words
+	 * For each found words $callback function invoked with follow arguments:
+	 * call_user_func($callback, $word, $annot)
+	 * when $readAnnot is FALSE then $annot arg is always NULL
+	 *
+	 * @param mixed $startNode
+	 * @param mixed $callback callback function(in php format callback i.e. string or array(obj, method) or array(class, method)
+	 * @param bool $readAnnot read annot
+	 * @param string $path string to be append to all words
+	 */
+	function collect($startNode, $callback, $readAnnot = true, $path = '');
+	
+	/**
+	 * Read state at given index
+	 *
+	 * @param int $index
+	 * @return array
+	 */
+	function readState($index);
+	
+	/**
+	 * Unpack transition from binary form to array
+	 *
+	 * @param mixed $rawTranses may be array for convert more than one transitions
+	 * @return array
+	 */
+	function unpackTranses($rawTranses);
+}
 
-class phpMorphy_Fsa {
+abstract class phpMorphy_Fsa implements phpMorphy_IFsa {
+	const HEADER_SIZE = 60;
+	
 	var $resource;
 	var $header;
 	var $fsa_start;
 	var $root_trans;
 	var $alphabet;	
 	
-	// private ctor
-	function phpMorphy_Fsa($resource, $header) {
+	protected function phpMorphy_Fsa($resource, $header) {
 		$this->resource = $resource;
 		$this->header = $header;
 		$this->fsa_start = $header['fsa_offset'];
-		$this->root_trans = $this->_readRootTrans();
+		$this->root_trans = $this->readRootTrans();
 	}
 
 	// static
-	function &create(&$storage) {
-		$header = phpMorphy_Fsa::_readHeader(
-			$storage->read(0, PHPMORPHY_FSA_HEADER_SIZE)
+	static function create(phpMorphy_Storage $storage) {
+		$header = phpMorphy_Fsa::readHeader(
+			$storage->read(0, self::HEADER_SIZE)
 		);
 		
-		if(!phpMorphy_Fsa::_validateHeader($header)) {
-			return php_morphy_error("Invalid fsa format");
+		if(!phpMorphy_Fsa::validateHeader($header)) {
+			throw new phpMorphy_Exception('Invalid fsa format');
 		}
 		
 		if($header['flags']['is_sparse']) {
@@ -52,48 +118,42 @@ class phpMorphy_Fsa {
 		} else if($header['flags']['is_tree']) {
 			$type = 'tree';
 		} else {
-			return php_morphy_error("Only sparse or tree fsa`s supported");
+			throw new phpMorphy_Exception('Only sparse or tree fsa`s supported');
 		}
 		
-		$storage_type = phpMorphy_Fsa::_getStorageString($storage->getType());
+		$storage_type = phpMorphy_Fsa::getStorageString($storage->getType());
 		$file_path = dirname(__FILE__) . "/access/fsa_{$type}_{$storage_type}.php";
 		$clazz = 'phpMorphy_Fsa_' . ucfirst($type) . '_' . ucfirst($storage_type);
 		
 		require_once($file_path);
-		$obj =& new $clazz(
+		return new $clazz(
 			$storage->getResource(),
 			$header
 		);
-		
-		return $obj;
 	}
 	
 	function getRootTrans() { return $this->root_trans; }
 	
-	function &getRootState() {
-		$obj =& $this->_createState($this->_getRootStateIndex());
-		return $obj;
+	function getRootState() {
+		return $this->createState($this->getRootStateIndex());
 	}
 	
 	function getAlphabet() {
 		if(!isset($this->alphabet)) {
-			$this->alphabet = str_split($this->_readAlphabet());
+			$this->alphabet = str_split($this->readAlphabet());
 		}
 		
 		return $this->alphabet;
 	}
 	
-	function &_createState($index) {
+	protected function createState($index) {
 		require_once(PHPMORPHY_DIR . '/fsa/fsa_state.php');
-		
-		$obj =& new phpMorphy_State($this, $index);
-		return $obj;
+		return new phpMorphy_State($this, $index);
 	}
 	
-	// static
-	function _readHeader($headerRaw) {
-		if(strlen($headerRaw) != PHPMORPHY_FSA_HEADER_SIZE) {
-			return php_morphy_error("Invalid header string given");
+	static protected function readHeader($headerRaw) {
+		if(strlen($headerRaw) != self::HEADER_SIZE) {
+			throw new phpMorphy_Exception('Invalid header string given');
 		}
 		
 		$fields = array(
@@ -127,7 +187,7 @@ class phpMorphy_Fsa {
 		$header = unpack(substr($unpack_str, 0, -1), $headerRaw);
 
 		if(false === $header) {
-			return php_morphy_error("Can`t unpack header");
+			throw new phpMorphy_Exception('Can`t unpack header');
 		}
 
 		$flags = array();
@@ -143,7 +203,7 @@ class phpMorphy_Fsa {
 	}
 	
 	// static
-	function _validateHeader($header) {
+	static protected function validateHeader($header) {
 		if(
 			'meal' != $header['fourcc'] ||
 			2 != $header['ver'] ||
@@ -164,7 +224,7 @@ class phpMorphy_Fsa {
 	}
 	
 	// static
-	function _getStorageString($type) {
+	static protected function getStorageString($type) {
 		$types_map = array(
 			PHPMORPHY_STORAGE_FILE => 'file',
 			PHPMORPHY_STORAGE_MEM => 'mem',
@@ -172,33 +232,27 @@ class phpMorphy_Fsa {
 		);
 		
 		if(!isset($types_map[$type])) {
-			return php_morphy_error('Unsupported storage type ' . $storage->getType());
+			throw new phpMorphy_Exception('Unsupported storage type ' . $storage->getType());
 		}
 		
 		return $types_map[$type];
 	}
 	
-	function _getRootStateIndex() { return 0; }
+	protected function getRootStateIndex() { return 0; }
 	
-	// pure virtual
-	function getAnnot($trans) { }
-	function walk($trans, $word, $readAnnot = true) { }
-	function collect($startNode, $callback, $readAnnot = true, $path = '') { }
-	function readState($index) { }
-	function unpackTranses($rawTranses) { }
-	function _readRootTrans() { }
-	function _readAlphabet() { }
+	abstract protected function readRootTrans();
+	abstract protected function readAlphabet();
 };
 
-class phpMorphy_Fsa_Decorator {
+class phpMorphy_Fsa_Decorator implements phpMorphy_IFsa {
 	var $fsa;
 	
-	function phpMorphy_Fsa_Decorator(&$fsa) {
-		$this->fsa =& $fsa;
+	function phpMorphy_Fsa_Decorator(phpMorphy_IFsa $fsa) {
+		$this->fsa = $fsa;
 	}
 	
 	function getRootTrans() { return $this->fsa->getRootTrans(); }
-	function &getRootState() { return $this->fsa->getRootState(); }
+	function getRootState() { return $this->fsa->getRootState(); }
 	function getAlphabet() { return $this->fsa->getAlphabet(); }
 	function getAnnot($trans) { return $this->fsa->getAnnot($trans); }
 	function walk($start, $word, $readAnnot = true) { return $this->fsa->walk($start, $word, $readAnnot); }
@@ -226,5 +280,5 @@ class phpMorphy_Fsa_WordsCollector {
 	
 	function getItems() { return $this->items; }
 	function clear() { $this->items = array(); }
-	function getCallback() { return array(&$this, 'collect'); }
+	function getCallback() { return array($this, 'collect'); }
 };

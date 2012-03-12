@@ -20,7 +20,26 @@
  * Boston, MA 02111-1307, USA.
  */
 
-class phpMorphy_GramTab_StandartBuilder {
+interface phpMorphy_GramTab_IBuilder {
+	/**
+	 * Build gramifo string from part of speech and grammems string
+	 *
+	 * @param string $pos Part of speech string
+	 * @param string $grammems Grammems string
+	 * @return string
+	 */
+	function build($pos, $grammems);
+	
+	/**
+	 * Join several graminfo strings into one
+	 *
+	 * @param array $strings
+	 * @return string
+	 */
+	function join($strings);
+}
+ 
+class phpMorphy_GramTab_StandartBuilder implements phpMorphy_GramTab_IBuilder {
 	function build($pos, $grammems) {
 		if($pos) {
 			return "$pos $grammems";
@@ -40,10 +59,20 @@ class phpMorphy_GramTab {
 	var $grammems;
 	var $builder;
 	
-	function phpMorphy_GramTab($raw, &$builder) {
-		$this->builder =& $builder;
+	function phpMorphy_GramTab($raw, phpMorphy_GramTab_IBuilder $builder) {
+		$this->builder = $builder;
 		
-		$data = $this->_prepare($raw);
+		$data = $this->prepare($raw);
+		
+		if(
+			!is_array($data) ||
+			!isset($data['index']) ||
+			!isset($data['grammems']) ||
+			!isset($data['poses'])
+		) {
+			throw new phpMorphy_Exception("Broken gramtab data");
+		}
+		
 		$this->index = $data['index'];
 		$this->grammems = $data['grammems'];
 		$this->poses = $data['poses'];
@@ -67,7 +96,7 @@ class phpMorphy_GramTab {
 		}
 	}
 	
-	function _prepare($data) {
+	protected function prepare($data) {
 		return unserialize($data);
 	}
 };

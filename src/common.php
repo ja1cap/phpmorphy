@@ -29,18 +29,35 @@ require_once(PHPMORPHY_DIR . '/graminfo/graminfo.php');
 require_once(PHPMORPHY_DIR . '/morphiers.php');
 require_once(PHPMORPHY_DIR . '/storage.php');
 
-if(version_compare(PHP_VERSION, '5') < 0) {
-	function php_morphy_error($errorMessage, $result = false) {
-		trigger_error($errorMessage, E_USER_ERROR);
-		return $result;
-	}
+class phpMorphy_Exception extends Exception { }
 
-	require_once(PHPMORPHY_DIR . '/php4_compat.php');
-} else {
-	require_once(PHPMORPHY_DIR . '/php5_compat.php');
+interface phpMorphy_IFilesBundle {
+	/**
+	 * Returns common automat file name
+	 * @return string
+	 */
+	function getCommonAutomatFile();
+	
+	/**
+	 * Returns predict automat file name
+	 * @return string
+	 */
+	function getPredictAutomatFile();
+	
+	/**
+	 * Returns gram info file name
+	 * @return string
+	 */
+	function getGramInfoFile();
+	
+	/**
+	 * Returns gramtab file name
+	 * @return string
+	 */
+	function getGramTabFile();
 }
 
-class phpMorphy_FilesBundle {
+class phpMorphy_FilesBundle implements phpMorphy_IFilesBundle {
 	 var $dir;
 	 var $lang;
 
@@ -50,25 +67,24 @@ class phpMorphy_FilesBundle {
 	}
 
 	function getCommonAutomatFile() {
-		return $this->_genFileName('%s/common_aut.%s.bin');
+		return $this->genFileName('%s/common_aut.%s.bin');
 	}
 
 	function getPredictAutomatFile() {
-		return $this->_genFileName('%s/predict_aut.%s.bin');
+		return $this->genFileName('%s/predict_aut.%s.bin');
 	}
 
 	function getGramInfoFile() {
-		return $this->_genFileName('%s/morph_data.%s.bin');
+		return $this->genFileName('%s/morph_data.%s.bin');
 	}
 	
 	function getGramTabFile() {
-		return $this->_genFileName('%s/gramtab.%s.bin');
+		return $this->genFileName('%s/gramtab.%s.bin');
 	}
 
-	function _genFileName($fmt) {
+	protected function genFileName($fmt) {
 		return sprintf($fmt, $this->dir, strtolower($this->lang));		
 	}
-	
 };
 
 class phpMorphy {
@@ -80,44 +96,44 @@ class phpMorphy {
 	var $bulk_morphier;
 	var $predict_morphier;
 	
-	function phpMorphy(&$bundle, $options = null) {
-		$options = $this->_repairOptions($options);
+	function phpMorphy(phpMorphy_IFilesBundle $filesBundle, array $options = null) {
+		$options = $this->repairOptions($options);
 		$this->options = $options;
-		$this->bundle =& $bundle;
+		$this->bundle = $filesBundle;
 		
-		$common_fsa =& $this->_createFsa(
-			$this->_createStorage(
+		$common_fsa = $this->createFsa(
+			$this->createStorage(
 				$options['storage'],
-				$bundle->getCommonAutomatFile()
+				$filesBundle->getCommonAutomatFile()
 			)
 		);
 		
-		$this->common_fsa =& $common_fsa;
+		$this->common_fsa = $common_fsa;
 		
-		$graminfo =& $this->_createGramInfo(
-			$this->_createStorage(
+		$graminfo = $this->createGramInfo(
+			$this->createStorage(
 				$options['storage'],
-				$bundle->getGramInfoFile()
+				$filesBundle->getGramInfoFile()
 			)
 		);
 		
-		$this->graminfo =& $graminfo;
+		$this->graminfo = $graminfo;
 		
 		$extra_morphiers = array();
 		
 		if($options['predict_by_suffix']) {
-			$extra_morphiers[] =& $this->_createPredictBySuffixMorphier(
+			$extra_morphiers[] = $this->createPredictBySuffixMorphier(
 				$common_fsa,
 				$graminfo
 			);
 		}
 		
 		if($options['predict_by_db']) {
-			$extra_morphiers[] =& $this->_createPredictByDatabaseMorphier(
-				$this->_createFsa(
-					$this->_createStorage(
+			$extra_morphiers[] = $this->createPredictByDatabaseMorphier(
+				$this->createFsa(
+					$this->createStorage(
 						$options['storage'],
-						$bundle->getPredictAutomatFile()
+						$filesBundle->getPredictAutomatFile()
 					)
 				),
 				$graminfo
@@ -126,12 +142,12 @@ class phpMorphy {
 		
 		$predict_morphier = null;
 		$single_morphier = null;
-		$standalone_morphier =& $this->_createSingleMorphier($common_fsa, $graminfo);
+		$standalone_morphier = $this->createSingleMorphier($common_fsa, $graminfo);
 		
 		if(($count = count($extra_morphiers))) {
 			if($count > 1) {
-				$predict_morphier =& $this->_createChainMorphier();
-				$single_morphier =& $this->_createChainMorphier();
+				$predict_morphier = $this->createChainMorphier();
+				$single_morphier = $this->createChainMorphier();
 				
 				$single_morphier->add($standalone_morphier);
 				
@@ -140,50 +156,50 @@ class phpMorphy {
 					$single_morphier->add($extra_morphiers[$i]);
 				}
 			} else {
-				$predict_morphier =& $extra_morphiers[0];
+				$predict_morphier = $extra_morphiers[0];
 				
-				$single_morphier =& $this->_createChainMorphier();
+				$single_morphier = $this->createChainMorphier();
 				$single_morphier->add($standalone_morphier);
 				$single_morphier->add($predict_morphier);
 			}
 		} else {
-			$single_morphier =& $standalone_morphier;
+			$single_morphier = $standalone_morphier;
 		}
 		
 		if($options['with_gramtab']) {
-			$this->gramtab =& $this->_createGramTab(
+			$this->gramtab = $this->createGramTab(
 				$options['storage'],
-				$bundle->getGramTabFile()
+				$filesBundle->getGramTabFile()
 			);
 			
-			$this->single_morphier =& $this->_createGramTabMorphier(
+			$this->single_morphier = $this->createGramTabMorphier(
 				$single_morphier,
 				$this->gramtab
 			);			
 		} else {
-			$this->single_morphier =& $single_morphier;
+			$this->single_morphier = $single_morphier;
 		}
 		
 		$this->predict_morphier = $predict_morphier;
 	}
 	
-	function &getSingleMorphier() { return $this->single_morphier; }
+	function getSingleMorphier() { return $this->single_morphier; }
 	
-	function &getBulkMorphier() {
+	function getBulkMorphier() {
 		if(!isset($this->bulk_morphier)) {
-			$bulk_morphier =& $this->_createBulkMorphier(
+			$bulk_morphier = $this->createBulkMorphier(
 				$this->common_fsa,
 				$this->graminfo,
 				$this->predict_morphier
 			);
 			
 			if($this->options['with_gramtab']) {
-				$this->bulk_morphier =& $this->_createGramTabMorphierBulk(
+				$this->bulk_morphier = $this->createGramTabMorphierBulk(
 					$bulk_morphier,
 					$this->gramtab
 				);
 			} else {
-				$this->bulk_morphier =& $bulk_morphier;
+				$this->bulk_morphier = $bulk_morphier;
 			}
 		}
 		
@@ -194,7 +210,7 @@ class phpMorphy {
 		if(!is_array($word)) {
 			return $this->single_morphier->getBaseForm($word);
 		} else {
-			$bulker =& $this->getBulkMorphier();
+			$bulker = $this->getBulkMorphier();
 			return $bulker->getBaseForm($word);
 		}
 	}
@@ -203,7 +219,7 @@ class phpMorphy {
 		if(!is_array($word)) {
 			return $this->single_morphier->getAllForms($word);
 		} else {
-			$bulker =& $this->getBulkMorphier();
+			$bulker = $this->getBulkMorphier();
 			return $bulker->getAllForms($word);
 		}
 	}
@@ -212,7 +228,7 @@ class phpMorphy {
 		if(!is_array($word)) {
 			return $this->single_morphier->getPseudoRoot($word);
 		} else {
-			$bulker =& $this->getBulkMorphier();
+			$bulker = $this->getBulkMorphier();
 			return $bulker->getPseudoRoot($word);
 		}
 	}
@@ -221,7 +237,7 @@ class phpMorphy {
 		if(!is_array($word)) {
 			return $this->single_morphier->getAllFormsWithGramInfo($word);
 		} else {
-			$bulker =& $this->getBulkMorphier();
+			$bulker = $this->getBulkMorphier();
 			return $bulker->getAllFormsWithGramInfo($word);
 		}
 	}
@@ -230,7 +246,7 @@ class phpMorphy {
 		return $this->graminfo->getCodepage();
 	}
 	
-	function _repairOptions($options) {
+	protected function repairOptions($options) {
 		$default = array(
 		 	'storage' => PHPMORPHY_STORAGE_FILE,
 			'with_gramtab' => false,
@@ -252,71 +268,59 @@ class phpMorphy {
 		return $result;
 	}
 	
-	function &_createGramTabMorphierBulk(&$morphier, &$gramtab) {
-		$obj =& new phpMorphy_Morphier_WithGramTabBulk($morphier, $gramtab);
-		return $obj;
+	protected function createGramTabMorphierBulk($morphier, $gramtab) {
+		return new phpMorphy_Morphier_WithGramTabBulk($morphier, $gramtab);
 	}
 	
-	function &_createGramTabMorphier(&$morphier, &$gramtab) {
-		$obj =& new phpMorphy_Morphier_WithGramTab($morphier, $gramtab);
-		return $obj;
+	protected function createGramTabMorphier($morphier, $gramtab) {
+		return new phpMorphy_Morphier_WithGramTab($morphier, $gramtab);
 	}
 	
-	function _readGramTab($storageType, $fileName) {
-		$storage =& $this->_createStorage($storageType, $fileName);
+	protected function readGramTab($storageType, $fileName) {
+		$storage = $this->createStorage($storageType, $fileName);
 		return $storage->read(0, $storage->getFileSize());
 	}
 	
-	function &_createGramTab($storageType, $fileName) {
+	protected function createGramTab($storageType, $fileName) {
 		require_once(PHPMORPHY_DIR . '/gramtab.php');
 		
-		$obj =& new phpMorphy_GramTab(
-			$this->_readGramTab($storageType, $fileName),
+		return new phpMorphy_GramTab(
+			$this->readGramTab($storageType, $fileName),
 			new phpMorphy_GramTab_StandartBuilder()
 		);
-		return $obj;
 	}
 	
-	function &_createGramInfo(&$storage) {
-		$obj =& new phpMorphy_GramInfo_RuntimeCaching(
+	protected function createGramInfo($storage) {
+		return new phpMorphy_GramInfo_RuntimeCaching(
 			phpMorphy_GramInfo::create($storage)
 		);
-		
-		return $obj;
 	}
 	
-	function &_createFsa(&$storage) {
-		$obj =& phpMorphy_Fsa::create($storage);
-		return $obj;
+	protected function createFsa($storage) {
+		return phpMorphy_Fsa::create($storage);
 	}
 	
-	function &_createStorage($type, $fileName) {
-		$obj =& phpMorphy_Storage::create($type, $fileName);
-		return $obj;
+	protected function createStorage($type, $fileName) {
+		return phpMorphy_Storage::create($type, $fileName);
 	}
 	
-	function &_createChainMorphier() {
-		$obj =& new phpMorphy_Morphier_Chain();
-		return $obj;
+	protected function createChainMorphier() {
+		return new phpMorphy_Morphier_Chain();
 	}
 	
-	function &_createSingleMorphier(&$fsa, &$graminfo) {
-		$obj =& new phpMorphy_Morphier_DictSingle($fsa, $graminfo);
-		return $obj;
+	protected function createSingleMorphier($fsa, $graminfo) {
+		return new phpMorphy_Morphier_DictSingle($fsa, $graminfo);
 	}
 	
-	function &_createBulkMorphier(&$fsa, &$graminfo, &$predict) {
-		$obj =& new phpMorphy_Morphier_DictBulk($fsa, $graminfo, $predict);
-		return $obj;
+	protected function createBulkMorphier($fsa, $graminfo, $predict) {
+		return new phpMorphy_Morphier_DictBulk($fsa, $graminfo, $predict);
 	}
 	
-	function &_createPredictBySuffixMorphier(&$fsa, &$graminfo) {
-		$obj =& new phpMorphy_Morphier_PredictBySuffix($fsa, $graminfo);
-		return $obj;
+	protected function createPredictBySuffixMorphier($fsa, $graminfo) {
+		return new phpMorphy_Morphier_PredictBySuffix($fsa, $graminfo);
 	}
 	
-	function &_createPredictByDatabaseMorphier(&$fsa, &$graminfo) {
-		$obj =& new phpMorphy_Morphier_PredictByDatabse($fsa, $graminfo);
-		return $obj;
+	protected function createPredictByDatabaseMorphier($fsa, $graminfo) {
+		return new phpMorphy_Morphier_PredictByDatabse($fsa, $graminfo);
 	}
 };

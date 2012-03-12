@@ -3,40 +3,39 @@ define('PHPMORPHY_STORAGE_FILE',	'file');
 define('PHPMORPHY_STORAGE_MEM',		'mem');
 define('PHPMORPHY_STORAGE_SHM',		'shm');
 
-class phpMorphy_Storage {
+abstract class phpMorphy_Storage {
 	var $file_name;
 	var $resource;
 	
 	// private ctor
-	function phpMorphy_Storage($fileName) {
+	protected function phpMorphy_Storage($fileName) {
 		$this->file_name = $fileName;
-		$this->resource =& $this->_open($fileName);
+		$this->resource = $this->open($fileName);
 	}
 	
 	// static
-	function &create($type, $fileName) {
+	static function create($type, $fileName) {
 		// TODO: This ugly refactor latter
 		switch($type) {
 			case PHPMORPHY_STORAGE_FILE: 
 			case PHPMORPHY_STORAGE_MEM:
 			case PHPMORPHY_STORAGE_SHM: break;
-			default: return php_morphy_error("Invalid storage type $type specified");
+			default:
+				throw new phpMorphy_Exception("Invalid storage type $type specified");
 		}
 		
 		$clazz = 'phpMorphy_Storage_' . ucfirst(strtolower($type));
-		$obj =& new $clazz($fileName);
 		
-		return $obj;
+		return new $clazz($fileName);
 	}
 	
 	function getFileName() { return $this->file_name; }
-	function &getResource() { return $this->resource; }
+	function getResource() { return $this->resource; }
 	
-	// abstract
-	function getFileSize() { }
-	function getType() { }
-	function read($offset, $len) { }
-	function _open($fileName) { }
+	abstract function getFileSize();
+	abstract function getType();
+	abstract function read($offset, $len);
+	abstract protected function open($fileName);
 };
 
 class phpMorphy_Storage_File extends phpMorphy_Storage {
@@ -44,7 +43,7 @@ class phpMorphy_Storage_File extends phpMorphy_Storage {
 	
 	function getFileSize() {
 		if(false === ($stat = fstat($this->resource))) {
-			return php_morphy_error('Can`t invoke fstat for ' . $this->file_name . ' file');
+			throw new phpMorphy_Exception('Can`t invoke fstat for ' . $this->file_name . ' file');
 		}
 		
 		return $stat['size'];
@@ -55,9 +54,9 @@ class phpMorphy_Storage_File extends phpMorphy_Storage {
 		return fread($this->resource, $len);
 	}
 	
-	function _open($fileName) {
+	function open($fileName) {
 		if(false === ($fh = fopen($fileName, 'rb'))) {
-			return php_morphy_error("Can`t open $this->file_name file");
+			throw new phpMorphy_Exception("Can`t open $this->file_name file");
 		}
 		
 		return $fh;
@@ -75,9 +74,9 @@ class phpMorphy_Storage_Mem extends phpMorphy_Storage {
 		return substr($this->resource, $offset, $len);
 	}
 	
-	function _open($fileName) {
+	function open($fileName) {
 		if(false === ($string = file_get_contents($fileName))) {
-			return php_morphy_error("Can`t read $fileName file");
+			throw new phpMorphy_Exception("Can`t read $fileName file");
 		}
 		
 		return $string;
@@ -98,8 +97,8 @@ class phpMorphy_Storage_Shm extends phpMorphy_Storage {
 		return shmop_read($this->resource, $offset, $len);
 	}
 	
-	function _open($fileName) {
-		$this->manager =& $this->_createManager($fileName);
+	function open($fileName) {
+		$this->manager = $this->createManager($fileName);
 		
 		$result = $this->manager->get();
 		
@@ -108,9 +107,8 @@ class phpMorphy_Storage_Shm extends phpMorphy_Storage {
 		return $result['shm_id'];
 	}
 	
-	function &_createManager($file) {
+	protected function createManager($file) {
 		require_once(PHPMORPHY_DIR . '/shm_utils.php');
-		$obj =& new ShmFileManager($file, 'f');
-		return $obj;
+		return new ShmFileManager($file, 'f');
 	}
 }

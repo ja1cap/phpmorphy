@@ -20,47 +20,45 @@
  * Boston, MA 02111-1307, USA.
  */
 
-/**
- * All classes in this file implements IMorphier interface
- * interface IMorphier {
- *   function getBaseForm($word);
- *   function getAllForms($word);
- *   function getAllFormsWithGramInfo($word);
- * };
- */
+interface phpMorphy_IMorphier {
+	function getBaseForm($word);
+	function getAllForms($word);
+	function getAllFormsWithGramInfo($word);
+	function getPseudoRoot($word);
+};
  
 /**
  * Base class for all morphiers
  * @abstract 
  */
-class phpMorphy_Morphier_Base {
+abstract class phpMorphy_Morphier_Base implements phpMorphy_IMorphier {
 	var $graminfo;
 	var $fsa;
 	var $root_trans;
 	
-	function phpMorphy_Morphier_Base(&$fsa, &$graminfo) {
-		$this->fsa =& $fsa;
-		$this->graminfo =& $graminfo;
+	function phpMorphy_Morphier_Base(phpMorphy_IFsa $fsa, phpMorphy_IGramInfo $graminfo) {
+		$this->fsa = $fsa;
+		$this->graminfo = $graminfo;
 		$this->root_trans = $fsa->getRootTrans();
 	}
 	
 	function getBaseForm($word) {
-		if(false === ($annot = $this->_findWord($word))) {
+		if(false === ($annot = $this->findWord($word))) {
 			return false;
 		}
 		
-		return $this->_composeForms($word, $annot, true);
+		return $this->composeForms($word, $annot, true);
 	}
 	
 	function getPseudoRoot($word) {
-		if(false === ($annots = $this->_findWord($word))) {
+		if(false === ($annots = $this->findWord($word))) {
 			return false;
 		}
 		
 		$result = array();
 		
 		foreach($annots as $annot) {
-			list($base) = $this->_getBaseAndPrefix(
+			list($base) = $this->getBaseAndPrefix(
 				$word,
 				$annot['cplen'],
 				$annot['plen'],
@@ -75,25 +73,25 @@ class phpMorphy_Morphier_Base {
 	
 	
 	function getAllForms($word) {
-		if(false === ($annot = $this->_findWord($word))) {
+		if(false === ($annot = $this->findWord($word))) {
 			return false;
 		}
 		
-		return $this->_composeForms($word, $annot, false);
+		return $this->composeForms($word, $annot, false);
 	}
 	
 	function getAllFormsWithGramInfo($word) {
-		if(false === ($annots = $this->_findWord($word))) {
+		if(false === ($annots = $this->findWord($word))) {
 			return false;
 		}
 		
-		$result = $this->_composeGramInfos($annots, 'all');
+		$result = $this->composeGramInfos($annots, 'all');
 		$i = 0;
 		foreach($annots as $annot) {
 			$current =& $result[$i];
 			
 			$current['common'] = $annot['ancode'];
-			$current['forms'] =  $this->_composeForms($word, array($annot), false);
+			$current['forms'] =  $this->composeForms($word, array($annot), false);
 			
 			unset($current);
 			$i++;
@@ -102,10 +100,10 @@ class phpMorphy_Morphier_Base {
 		return $result;
 	}
 	
-	function &getFsa() { return $this->fsa; }
-	function &getGramInfo() { return $this->graminfo; }
+	function getFsa() { return $this->fsa; }
+	function getGramInfo() { return $this->graminfo; }
 	
-	function _composeGramInfos($annots, $key) {
+	protected function composeGramInfos($annots, $key) {
 		$result = array();
 		
 		foreach($annots as $annot) {
@@ -117,11 +115,11 @@ class phpMorphy_Morphier_Base {
 		return $result;
 	}
 	
-	function _composeForms($word, $annots, $onlyBase) {
+	protected function composeForms($word, $annots, $onlyBase) {
 		$result = array();
 		
 		foreach($annots as $annot) {
-			list($base, $prefix) = $this->_getBaseAndPrefix(
+			list($base, $prefix) = $this->getBaseAndPrefix(
 				$word,
 				$annot['cplen'],
 				$annot['plen'],
@@ -136,11 +134,10 @@ class phpMorphy_Morphier_Base {
 			}
 		}
 		
-		
 		return array_keys($result);
 	}
 	
-	function _getBaseAndPrefix($word, $cplen, $plen, $flen) {
+	protected function getBaseAndPrefix($word, $cplen, $plen, $flen) {
 		if($flen) {
 			$base = substr($word, $cplen + $plen, -$flen);
 		} else {
@@ -157,34 +154,34 @@ class phpMorphy_Morphier_Base {
 	}
 	
 	// abstract methods
-	function _findWord($word) { }
-	function _decodeAnnot($annotRaw) { }
-	function _getAnnotSize() { }
+	abstract protected function findWord($word);
+	abstract protected function decodeAnnot($annotRaw);
+	abstract protected function getAnnotSize();
 };
 
 // TODO: This can`t extends phpMorphy_Morphier_Base, refactor it!
-class phpMorphy_Morphier_Dict extends phpMorphy_Morphier_Base {
+abstract class phpMorphy_Morphier_Dict extends phpMorphy_Morphier_Base {
 	var $predict;
 	var $single_morphier;
 	var $bulk_morphier;
 	
-	function phpMorphy_Morphier_Dict(&$fsa, &$graminfo, &$predict) {
+	function phpMorphy_Morphier_Dict(phpMorphy_IFsa $fsa, phpMorphy_IGramInfo $graminfo, phpMorphy_IMorphier $predict) {
 		parent::phpMorphy_Morphier_Base($fsa, $graminfo);
-		$this->predict =& $predict;
+		$this->predict = $predict;
 		
-		$this->single_morphier = $this->_createSingle($fsa, $graminfo);
+		$this->single_morphier = $this->createSingle($fsa, $graminfo);
 	}
 	
-	function getBaseForm($word) { return $this->_invoke('getBaseForm', $word); }
-	function getAllForms($word) { return $this->_invoke('getAllForms', $word); }
-	function getPseudoRoot($word) { return $this->_invoke('getPseudoRoot', $word); }
+	function getBaseForm($word) { return $this->invoke('getBaseForm', $word); }
+	function getAllForms($word) { return $this->invoke('getAllForms', $word); }
+	function getPseudoRoot($word) { return $this->invoke('getPseudoRoot', $word); }
 	
-	function _invoke($method, $word) {
+	protected function invoke($method, $word) {
 		if(!is_array($word)) {
 			return $this->single_morphier->$method($word);
 		} else {
 			if(!isset($this->bulk_morphier)) {
-				$this->bulk_morphier =& $this->_createBulk(
+				$this->bulk_morphier = $this->createBulk(
 					$this->fsa,
 					$this->graminfo,
 					$this->predict
@@ -195,26 +192,24 @@ class phpMorphy_Morphier_Dict extends phpMorphy_Morphier_Base {
 		}
 	}
 	
-	function &_createSingle(&$fsa, &$graminfo, &$predict) {
-		$obj =& new phpMorphy_Morphier_DictSingle($fsa, $graminfo, $predict);
-		return $obj;
+	protected function createSingle(phpMorphy_IFsa $fsa, phpMorphy_IGramInfo $graminfo, phpMorphy_IMorphier $predict) {
+		return new phpMorphy_Morphier_DictSingle($fsa, $graminfo, $predict);
 	}
 	
-	function &_createBulk(&$fsa, &$graminfo, &$predict) {
-		$obj =& new phpMorphy_Morphier_DictBulk($fsa, $graminfo, $predict);
-		return $obj;
+	protected function createBulk(phpMorphy_IFsa $fsa, phpMorphy_IGramInfo $graminfo, phpMorphy_IMorphier $predict) {
+		return new phpMorphy_Morphier_DictBulk($fsa, $graminfo, $predict);
 	}
 }
 
-class phpMorphy_Morphier_Common extends phpMorphy_Morphier_Base {
-	function _getAnnotSize() { return 15; }
+abstract class phpMorphy_Morphier_Common extends phpMorphy_Morphier_Base {
+	protected function getAnnotSize() { return 15; }
 	
-	function _decodeAnnot($annotRaw) {
+	protected function decodeAnnot($annotRaw) {
 		$result = array();
 		
 		$len = strlen($annotRaw);
 		if($len % 15 != 0 || !$len) {
-			return php_morphy_error("Invalid annot with $len length given");
+			throw new phpMorphy_Exception("Invalid annot with $len length given");
 		}
 		
 		for($i = 0, $c = strlen($annotRaw); $i < $c; $i += 15) {
@@ -231,25 +226,25 @@ class phpMorphy_Morphier_Common extends phpMorphy_Morphier_Base {
 class phpMorphy_Morphier_DictBulk extends phpMorphy_Morphier_Common {
 	var $predict;
 	
-	function phpMorphy_Morphier_DictBulk(&$fsa, &$graminfo, &$predict) {
+	function phpMorphy_Morphier_DictBulk(phpMorphy_IFsa $fsa, phpMorphy_IGramInfo $graminfo, phpMorphy_IMorphier $predict) {
 		parent::phpMorphy_Morphier_Common($fsa, $graminfo);
 		$this->predict = $predict;
 	}
 	
 	function getBaseForm($words) {
-		return $this->_invoke('getBaseForm', $words, true, false);
+		return $this->invoke('getBaseForm', $words, true, false);
 	}
 	
 	function getAllForms($words) {
-		return $this->_invoke('getAllForms', $words, false, false);
+		return $this->invoke('getAllForms', $words, false, false);
 	}
 	
 	function getPseudoRoot($words) {
-		return $this->_invoke('getPseudoRoot', $words, true, true);
+		return $this->invoke('getPseudoRoot', $words, true, true);
 	}
 	
 	function getAllFormsWithGramInfo($words) {
-		$raw_annots = $this->_findWord($words);
+		$raw_annots = $this->findWord($words);
 		
 		$result = array();
 		if(isset($raw_annots[''])) {
@@ -267,13 +262,13 @@ class phpMorphy_Morphier_DictBulk extends phpMorphy_Morphier_Common {
 		foreach($raw_annots as $annot_raw => $words) {
 			if(!strlen($annot_raw)) continue;
 			
-			$annot_chunks = str_split($annot_raw, $this->_getAnnotSize());
-			$annot_decoded = $this->_decodeAnnot($annot_raw);
+			$annot_chunks = str_split($annot_raw, $this->getAnnotSize());
+			$annot_decoded = $this->decodeAnnot($annot_raw);
 			
 			foreach($words as $word) {
 				$i = 0;
 				foreach($annot_chunks as $chunk) {
-					$forms = $this->_composeForms(
+					$forms = $this->composeForms(
 						array($chunk => array($word)),
 						false,
 						false
@@ -296,11 +291,11 @@ class phpMorphy_Morphier_DictBulk extends phpMorphy_Morphier_Common {
 		return $result;
 	}
 	
-	function _invoke($method, $words, $onlyBase, $pseudoRoot) {
-		$annots = $this->_findWord($words);
+	protected function invoke($method, $words, $onlyBase, $pseudoRoot) {
+		$annots = $this->findWord($words);
 		
 		// TODO: Ugly hack!
-		$result = $this->_composeForms($annots, $onlyBase, $pseudoRoot);
+		$result = $this->composeForms($annots, $onlyBase, $pseudoRoot);
 		
 		if(isset($annots[''])) {
 			if($this->predict) {
@@ -317,8 +312,9 @@ class phpMorphy_Morphier_DictBulk extends phpMorphy_Morphier_Common {
 		return $result;
 	}
 	
-	function _findWord($words) {
-		$tree = $this->_buildPrefixTree($words);
+	protected function findWord($words) {
+		$tree = $this->buildPrefixTree($words);
+		
 		$annots = array();
 		$unknown_words_annot = '';
 		
@@ -353,7 +349,7 @@ class phpMorphy_Morphier_DictBulk extends phpMorphy_Morphier_Common {
 		return $annots;
 	}
 	
-	function _composeForms($annotsRaw, $onlyBase, $pseudoRoot) {
+	protected function composeForms($annotsRaw, $onlyBase, $pseudoRoot) {
 		$size_index = $onlyBase ? 'base_size' : 'all_size';
 		
 		$result = array();
@@ -361,7 +357,7 @@ class phpMorphy_Morphier_DictBulk extends phpMorphy_Morphier_Common {
 		foreach($annotsRaw as $annot_raw => $words) {
 			if(strlen($annot_raw) == 0) continue;
 			
-			foreach($this->_decodeAnnot($annot_raw) as $annot) {
+			foreach($this->decodeAnnot($annot_raw) as $annot) {
 				$flexias = $this->graminfo->readFlexiaData($annot, $onlyBase);
 				
 				$cplen = $annot['cplen'];
@@ -399,7 +395,7 @@ class phpMorphy_Morphier_DictBulk extends phpMorphy_Morphier_Common {
 		return $result;
 	}
 	
-	function _buildPrefixTree($words) {
+	protected function buildPrefixTree($words) {
 		sort($words);
 		
 		$prefixes = array();
@@ -423,14 +419,14 @@ class phpMorphy_Morphier_DictBulk extends phpMorphy_Morphier_Common {
 }
 
 class phpMorphy_Morphier_DictSingle extends phpMorphy_Morphier_Common {
-	function _findWord($word) {
+	protected function findWord($word) {
 		$result = $this->fsa->walk($this->root_trans, $word);
 		
 		if(!$result['result'] || null === $result['annot']) {
 			return false;
 		}
 		
-		return $this->_decodeAnnot($result['annot']);
+		return $this->decodeAnnot($result['annot']);
 	}
 };
 
@@ -438,13 +434,13 @@ class phpMorphy_Morphier_PredictBySuffix extends phpMorphy_Morphier_Common {
 	var $min_suf_len;
 	var $unknown_len;
 	
-	function phpMorphy_Morphier_PredictBySuffix(&$fsa, &$graminfo, $minimalSuffixLength = 4) {
+	function phpMorphy_Morphier_PredictBySuffix(phpMorphy_IFsa $fsa, phpMorphy_IGramInfo $graminfo, $minimalSuffixLength = 4) {
 		parent::phpMorphy_Morphier_Base($fsa, $graminfo);
 		
 		$this->min_suf_len = $minimalSuffixLength;
 	}
 	
-	function _findWord($word) {
+	protected function findWord($word) {
 		$word_len = strlen($word);
 		
 		for($i = 1, $c = $word_len - $this->min_suf_len; $i < $c; $i++) {
@@ -460,8 +456,8 @@ class phpMorphy_Morphier_PredictBySuffix extends phpMorphy_Morphier_Common {
 			$unknown_len = $i;
 			
 			
-			return $this->_fixAnnots(
-				$this->_decodeAnnot($result['annot']),
+			return $this->fixAnnots(
+				$this->decodeAnnot($result['annot']),
 				$unknown_len
 			);
 		} else {
@@ -469,7 +465,7 @@ class phpMorphy_Morphier_PredictBySuffix extends phpMorphy_Morphier_Common {
 		}
 	}
 	
-	function _fixAnnots($annots, $len) {
+	protected function fixAnnots($annots, $len) {
 		for($i = 0, $c = count($annots); $i < $c; $i++) {
 			$annots[$i]['cplen'] = $len;
 		}
@@ -523,7 +519,7 @@ class phpMorphy_PredictMorphier_Collector extends phpMorphy_Fsa_WordsCollector {
 		
 		$len = strlen($annotRaw);
 		if($len % 16 != 0 || !$len) {
-			return php_morphy_error("Invalid annot with $len length given");
+			throw new phpMorphy_Exception("Invalid annot with $len length given");
 		}
 		
 		for($i = 0, $c = strlen($annotRaw); $i < $c; $i += 16) {
@@ -541,20 +537,20 @@ class phpMorphy_Morphier_PredictByDatabse extends phpMorphy_Morphier_Base {
 	var $collector;
 	var $min_postfix_match;
 	
-	function phpMorphy_Morphier_PredictByDatabse(&$fsa, &$graminfo, $minPostfixMatch = 2, $collectLimit = 32) {
+	function phpMorphy_Morphier_PredictByDatabse(phpMorphy_IFsa $fsa, phpMorphy_IGramInfo $graminfo, $minPostfixMatch = 2, $collectLimit = 32) {
 		parent::phpMorphy_Morphier_Base($fsa, $graminfo);
 		
 		$this->min_postfix_match = $minPostfixMatch;
-		$this->collector =& $this->_createCollector($collectLimit);
+		$this->collector = $this->createCollector($collectLimit);
 	}
 	
-	function _findWord($word) {
+	protected function findWord($word) {
 		$result = $this->fsa->walk($this->root_trans, strrev($word));
 		
 		if($result['result'] && null !== $result['annot']) {
 			$annots = $result['annot'];
 		} else {
-			if(null === ($annots = $this->_determineAnnots($result['last_trans'], $result['walked']))) {
+			if(null === ($annots = $this->determineAnnots($result['last_trans'], $result['walked']))) {
 				return false;
 			}
 		}
@@ -563,14 +559,14 @@ class phpMorphy_Morphier_PredictByDatabse extends phpMorphy_Morphier_Base {
 			$annots = $this->collector->decodeAnnot($annots);
 		}
 		
-		return $this->_fixAnnots($annots);
+		return $this->fixAnnots($annots);
 	}
 	
 	// TODO: Refactor this!!!
-	function _getAnnotSize() { return 16; }
-	function _decodeAnnot($annots) { return $this->collector->decodeAnnot($annots); }
+	protected function getAnnotSize() { return 16; }
+	protected function decodeAnnot($annots) { return $this->collector->decodeAnnot($annots); }
 	
-	function _determineAnnots($trans, $matchLen) {
+	protected function determineAnnots($trans, $matchLen) {
 		$annots = $this->fsa->getAnnot($trans);
 		
 		if(null == $annots && $matchLen >= $this->min_postfix_match) {
@@ -587,7 +583,7 @@ class phpMorphy_Morphier_PredictByDatabse extends phpMorphy_Morphier_Base {
 		return $annots;
 	}
 	
-	function _fixAnnots($annots) {
+	protected function fixAnnots($annots) {
 		for($i = 0, $c = count($annots); $i < $c; $i++) {
 			$annots[$i]['cplen'] = $annots[$i]['plen'] = 0;
 		}
@@ -595,16 +591,15 @@ class phpMorphy_Morphier_PredictByDatabse extends phpMorphy_Morphier_Base {
 		return $annots;
 	}
 	
-	function &_createCollector($limit) {
-		$obj =& new phpMorphy_PredictMorphier_Collector($limit);
-		return $obj;
+	protected function createCollector($limit) {
+		return new phpMorphy_PredictMorphier_Collector($limit);
 	}
 };
 
-class phpMorphy_Morphier_Decorator {
+class phpMorphy_Morphier_Decorator implements phpMorphy_IMorphier {
 	var $morphier;
 	
-	function phpMorphy_Morphier_Decorator(&$morphier) {
+	function phpMorphy_Morphier_Decorator(phpMorphy_IMorphier $morphier) {
 		$this->morphier = $morphier;
 	}
 	
@@ -613,30 +608,30 @@ class phpMorphy_Morphier_Decorator {
 	function getAllFormsWithGramInfo($word) { return $this->morphier->getAllFormsWithGramInfo($word); }
 	function getPseudoRoot($word) { return $this->morphier->getPseudoRoot($word); }
 	
-	function &getFsa() { return $this->morphier->getFsa(); }
-	function &getGramInfo() { return $this->morphier->getGramInfo(); }
-	
-	function &getInner() { return $this->morphier; }
+	function getFsa() { return $this->morphier->getFsa(); }
+	function getGramInfo() { return $this->morphier->getGramInfo(); }
+
+	function getInner() { return $this->morphier; }
 }
 
 class phpMorphy_Morphier_WithGramTab extends phpMorphy_Morphier_Decorator {
 	var $gramtab;
 	var $file_name;
 	
-	function phpMorphy_Morphier_WithGramTab(&$morphier, &$gramtab) {
+	function phpMorphy_Morphier_WithGramTab(phpMorphy_IMorphier $morphier, phpMorphy_GramTab $gramtab) {
 		parent::phpMorphy_Morphier_Decorator($morphier);
-		$this->gramtab =& $gramtab;
+		$this->gramtab = $gramtab;
 	}
 	
 	function getAllFormsWithGramInfo($word) {
 		if(false !== ($result = $this->morphier->getAllFormsWithGramInfo($word))) {
-			$this->_postprocessItems($result);
+			$this->postprocessItems($result);
 		}
 		
 		return $result;
 	}
 	
-	function _postprocessItems(&$result) {
+	protected function postprocessItems(&$result) {
 		for($i = 0, $c = count($result); $i < $c; $i++) {
 			$res =& $result[$i];
 			$res['common'] = $this->gramtab->resolve($res['common']);
@@ -650,36 +645,38 @@ class phpMorphy_Morphier_WithGramTab extends phpMorphy_Morphier_Decorator {
 };
 
 class phpMorphy_Morphier_WithGramTabBulk extends phpMorphy_Morphier_WithGramTab {
-	function _postprocessItems(&$result) {
-		foreach(array_keys($result) as $key) {
-			parent::_postprocessItems($result[$key]);
+	protected function postprocessItems(&$result) {
+		foreach($result as $key => &$value) {
+			if(false !== $value) {
+				parent::postprocessItems($value);
+			}
 		}
 	}
 }
 
-class phpMorphy_Morphier_Chain {
+class phpMorphy_Morphier_Chain implements phpMorphy_IMorphier {
 	var $morphiers = array();
 	
 	function getMorphiers() { return $this->morphiers; }
-	function add(&$morphier) { $this->morphiers[] =& $morphier; }
+	function add(phpMorphy_IMorphier $morphier) { $this->morphiers[] = $morphier; }
 	
 	function getBaseForm($word) {
-		return $this->_invoke('getBaseForm', $word);
+		return $this->invoke('getBaseForm', $word);
 	}
 	
 	function getAllForms($word) {
-		return $this->_invoke('getAllForms', $word);
+		return $this->invoke('getAllForms', $word);
 	}
 	
 	function getAllFormsWithGramInfo($word) {
-		return $this->_invoke('getAllFormsWithGramInfo', $word);
+		return $this->invoke('getAllFormsWithGramInfo', $word);
 	}
 	
 	function getPseudoRoot($word) {
-		return $this->_invoke('getPseudoRoot', $word);
+		return $this->invoke('getPseudoRoot', $word);
 	}
 	
-	function _invoke($method, $word) {
+	protected function invoke($method, $word) {
 		for($i = 0, $c = count($this->morphiers); $i < $c; $i++) {
 			if(false !== ($result = $this->morphiers[$i]->$method($word))) {
 				return $result;
