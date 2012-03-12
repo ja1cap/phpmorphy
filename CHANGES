@@ -1,3 +1,6 @@
+Changes with phpMorphy 0.2.3.2                                   08 Apr 2008
+    *) Fixed bug with disabled prediction(both) and bulk mode used
+
 Changes with phpMorphy 0.2.3.1                                   02 Aug 2007
     *) Remove php4 stuff from fsa_state.php
 

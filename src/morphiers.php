@@ -26,7 +26,14 @@ interface phpMorphy_Morphier_Interface {
 	function getAllFormsWithGramInfo($word);
 	function getPseudoRoot($word);
 };
- 
+
+class phpMorphy_EmptyMorphier implements phpMorphy_Morphier_Interface {
+	function getBaseForm($word) { return false; }
+	function getAllForms($word) { return false; }
+	function getAllFormsWithGramInfo($word) { return false; }
+	function getPseudoRoot($word) { return false; }
+}
+
 /**
  * Base class for all morphiers
  * @abstract 
@@ -486,7 +493,7 @@ class phpMorphy_PredictMorphier_Collector extends phpMorphy_Fsa_WordsCollector {
 		if($this->collected > $this->limit) {
 			return false;
 		}
-		
+
 		$used_poses =& $this->used_poses;
 		$annots = $this->decodeAnnot($annotRaw);
 		

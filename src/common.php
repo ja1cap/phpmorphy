@@ -315,6 +315,10 @@ class phpMorphy {
 	}
 	
 	protected function createBulkMorphier($fsa, $graminfo, $predict) {
+		if(null === $predict) {
+			$predict = new phpMorphy_EmptyMorphier();
+		}
+
 		return new phpMorphy_Morphier_DictBulk($fsa, $graminfo, $predict);
 	}
 	
