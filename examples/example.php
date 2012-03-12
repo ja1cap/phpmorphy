@@ -49,8 +49,9 @@ echo "Testing single mode...\n";
 // each function return array with result or FALSE when no form(s) for given word found(or predicted)
 $base_form = $morphy->getBaseForm($word_one);
 $all_forms = $morphy->getAllForms($word_one);
+$pseudo_root = $morphy->getPseudoRoot($word_one);
 
-if(false === $base_form || false === $all_forms) {
+if(false === $base_form || false === $all_forms || false === $pseudo_root) {
 	die("Can`t find or predict $word_one word");
 }
 
@@ -64,6 +65,7 @@ echo "Testing bulk mode...\n";
 $bulk_words = array($word_one, $word_two);
 $base_form = $morphy->getBaseForm($bulk_words);
 $all_forms = $morphy->getAllForms($bulk_words);
+$pseudo_root = $morphy->getPseudoRoot($bulk_words);
 
 // Bulk result format:
 // array(

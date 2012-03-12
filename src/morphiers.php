@@ -52,6 +52,28 @@ class phpMorphy_Morphier_Base {
 		return $this->_composeForms($word, $annot, true);
 	}
 	
+	function getPseudoRoot($word) {
+		if(false === ($annots = $this->_findWord($word))) {
+			return false;
+		}
+		
+		$result = array();
+		
+		foreach($annots as $annot) {
+			list($base) = $this->_getBaseAndPrefix(
+				$word,
+				$annot['cplen'],
+				$annot['plen'],
+				$annot['flen']
+			);
+			
+			$result[$base] = 1;
+		}
+		
+		return array_keys($result);
+	}
+	
+	
 	function getAllForms($word) {
 		if(false === ($annot = $this->_findWord($word))) {
 			return false;
@@ -155,6 +177,7 @@ class phpMorphy_Morphier_Dict extends phpMorphy_Morphier_Base {
 	
 	function getBaseForm($word) { return $this->_invoke('getBaseForm', $word); }
 	function getAllForms($word) { return $this->_invoke('getAllForms', $word); }
+	function getPseudoRoot($word) { return $this->_invoke('getPseudoRoot', $word); }
 	
 	function _invoke($method, $word) {
 		if(!is_array($word)) {
@@ -214,11 +237,15 @@ class phpMorphy_Morphier_DictBulk extends phpMorphy_Morphier_Common {
 	}
 	
 	function getBaseForm($words) {
-		return $this->_invoke('getBaseForm', $words, true);
+		return $this->_invoke('getBaseForm', $words, true, false);
 	}
 	
 	function getAllForms($words) {
-		return $this->_invoke('getAllForms', $words, false);
+		return $this->_invoke('getAllForms', $words, false, false);
+	}
+	
+	function getPseudoRoot($words) {
+		return $this->_invoke('getPseudoRoot', $words, true, true);
 	}
 	
 	function getAllFormsWithGramInfo($words) {
@@ -246,12 +273,16 @@ class phpMorphy_Morphier_DictBulk extends phpMorphy_Morphier_Common {
 			foreach($words as $word) {
 				$i = 0;
 				foreach($annot_chunks as $chunk) {
+					$forms = $this->_composeForms(
+						array($chunk => array($word)),
+						false,
+						false
+					);
+					
+					$forms = $forms[$word];
+					
 					$result[$word][] = array(
-						'forms' => $this->_composeForms(
-							array($chunk => array($word)),
-							false,
-							false
-						),
+						'forms' => $forms,
 						'common' => $annot_decoded[$i]['ancode'],
 						'all' => $this->graminfo->readAncodes($annot_decoded[$i])
 					);
@@ -265,11 +296,11 @@ class phpMorphy_Morphier_DictBulk extends phpMorphy_Morphier_Common {
 		return $result;
 	}
 	
-	function _invoke($method, $words, $onlyBase) {
+	function _invoke($method, $words, $onlyBase, $pseudoRoot) {
 		$annots = $this->_findWord($words);
 		
 		// TODO: Ugly hack!
-		$result = $this->_composeForms($annots, $onlyBase);
+		$result = $this->_composeForms($annots, $onlyBase, $pseudoRoot);
 		
 		if(isset($annots[''])) {
 			if($this->predict) {
@@ -322,7 +353,7 @@ class phpMorphy_Morphier_DictBulk extends phpMorphy_Morphier_Common {
 		return $annots;
 	}
 	
-	function _composeForms($annotsRaw, $onlyBase) {
+	function _composeForms($annotsRaw, $onlyBase, $pseudoRoot) {
 		$size_index = $onlyBase ? 'base_size' : 'all_size';
 		
 		$result = array();
@@ -351,7 +382,11 @@ class phpMorphy_Morphier_DictBulk extends phpMorphy_Morphier_Common {
 					$prefix = $cplen ? substr($word, 0, $cplen) : '';
 					
 					for($i = 0, $c = count($flexias); $i < $c; $i += 2) {
-						$form = $prefix . $flexias[$i] . $base . $flexias[$i + 1];
+						if($pseudoRoot) {
+							$form = $base;
+						} else {
+							$form = $prefix . $flexias[$i] . $base . $flexias[$i + 1];
+						}
 						
 						if(!isset($result[$word]) || !in_array($form, $result[$word])) {
 							$result[$word][] = $form;
@@ -576,6 +611,7 @@ class phpMorphy_Morphier_Decorator {
 	function getBaseForm($word) { return $this->morphier->getBaseForm($word); }
 	function getAllForms($word) { return $this->morphier->getAllForms($word); }
 	function getAllFormsWithGramInfo($word) { return $this->morphier->getAllFormsWithGramInfo($word); }
+	function getPseudoRoot($word) { return $this->morphier->getPseudoRoot($word); }
 	
 	function &getFsa() { return $this->morphier->getFsa(); }
 	function &getGramInfo() { return $this->morphier->getGramInfo(); }
@@ -637,6 +673,10 @@ class phpMorphy_Morphier_Chain {
 	
 	function getAllFormsWithGramInfo($word) {
 		return $this->_invoke('getAllFormsWithGramInfo', $word);
+	}
+	
+	function getPseudoRoot($word) {
+		return $this->_invoke('getPseudoRoot', $word);
 	}
 	
 	function _invoke($method, $word) {

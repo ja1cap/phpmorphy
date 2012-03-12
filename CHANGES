@@ -1,3 +1,41 @@
+Changes with phpMorphy 0.2.1                                     22 Jun 2007
+    *) getPseudoRoot() method returns now ;)
+    *) getAllFormsWithGramInfo() in bulk mode returns wrong result:
+	    BEFORE 0.2.1:
+	    -------------
+		array(
+			'TEST' => array(
+					'forms' => array(
+						'TEST' => array(word forms),
+					),
+					'common' => common ancode OR grammem(s),
+					'all' => all gramcodes or grammems
+				),
+				array(
+					'forms' => array(
+						WORD => array(forms)
+					),
+					etc...
+				)
+			)
+		)
+
+		0.2.1:
+	    -------------
+		array(
+			'TEST' => array(
+				array(
+					'forms' => array(word forms),
+					'common' => common ancode OR grammem(s),
+					'all' => all gramcodes or grammems
+				),
+				array(
+					'forms' => array(word forms),
+					etc...
+				)
+			)
+		)
+
 Changes with phpMorphy 0.2a                                      05 Apr 2007
 
     *) Change dictionary format(now word lookup have O(N) complexity, N = word len)
