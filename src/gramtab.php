@@ -20,159 +20,132 @@
  * Boston, MA 02111-1307, USA.
  */
 
-interface phpMorphy_GramTab_Builder_Interace {
-	/**
-	 * Build gramifo string from part of speech and grammems string
-	 *
-	 * @param string $pos Part of speech string
-	 * @param string $grammems Grammems string
-	 * @return mixed
-	 */
-	function build($pos, $grammems);
-	
-	/**
-	 * @param string $grammems
-	 * @return mixed
-	 */
-	function processGrammems($grammems);
-	
-	/**
-	 * Join several graminfo strings into one
-	 *
-	 * @param array $strings
-	 * @return mixed
-	 */
-	function join($strings);
-}
-
 interface phpMorphy_GramTab_Interface {
-	/**
-	 * @param string $ancodes
-	 * @return mixed
-	 */
-	function resolve($ancodes);
-	
-	/**
-	 * @param string $ancode
-	 * @return void
-	 */
-	function resolveOne($ancode, &$pos, &$grammems);
-	
-	/**
-	 * @param string $ancodes
-	 * @return int
-	 */
-	function getFormsCount($ancodes);
-	
-	/**
-	 * @param string $ancodes
-	 * @return array
-	 */
-	function splitAncodes($ancodes);
+	function getGrammems($ancodeId);
+	function getPartOfSpeech($ancodeId);
+	function resolveGrammemIds($ids);
+	function resolvePartOfSpeechId($id);
+	function includeConsts();
 }
 
-class phpMorphy_GramTab_StringBuilder implements phpMorphy_GramTab_Builder_Interace {
-	function build($pos, $grammems) {
-		if($pos) {
-			return "$pos $grammems";
-		} else {
-			return $grammems;
-		}
-	}
-	
-	function processGrammems($grammems) {
-		return $grammems;
-	}
-	
-	function join($strings) {
-		return implode(';', $strings);
-	}
-};
+class phpMorphy_GramTab_Empty implements phpMorphy_GramTab_Interface {
+	function getGrammems($ancodeId) { return array(); }
+	function getPartOfSpeech($ancodeId) { return 0; }
+	function resolveGrammemIds($ids) { return is_array($ids) ? array() : ''; }
+	function resolvePartOfSpeechId($id) { return ''; }
+	function includeConsts() { }
+}
 
-class phpMorphy_GramTab_ArrayBuilder implements phpMorphy_GramTab_Builder_Interace {
-	function build($pos, $grammems) {
-		return array(
-			'grammems' => explode(',', $grammems),
-			'pos' => $pos
-		);
+class phpMorphy_GramTab_Proxy implements phpMorphy_GramTab_Interface {
+	protected $storage;
+	
+	function __construct(phpMorphy_Storage $storage) {
+		$this->storage = $storage;
 	}
 	
-	function processGrammems($grammems) {
-		return explode(',', $grammems);
+	function getGrammems($ancodeId) {
+		return $this->__obj->getGrammems($ancodeId);
 	}
 	
-	function join($strings) {
-		return $strings;
+	function getPartOfSpeech($ancodeId) {
+		return $this->__obj->getPartOfSpeech($ancodeId);
 	}
-};
+	
+	function resolveGrammemIds($ids) {
+		return $this->__obj->resolveGrammemIds($ids);
+	}
+	
+	function resolvePartOfSpeechId($id) {
+		return $this->__obj->resolvePartOfSpeechId($id);
+	}
+	
+	function includeConsts() {
+		return $this->__obj->includeConsts();
+	}
+	
+	function __get($name) {
+		if($name === '__obj') {
+			$this->__obj = phpMorphy_GramTab::create($this->storage);
+			unset($this->storage);
+			
+			return $this->__obj;
+		}
+		
+		throw new phpMorphy_Exception("Invalid prop name '$name'");
+	}
+}
 
 class phpMorphy_GramTab implements phpMorphy_GramTab_Interface {
 	protected
-		$index,
-		$poses,
+		$data,
+		$ancodes,
 		$grammems,
-		$builder;
+		$poses;
 	
-	function phpMorphy_GramTab($raw, phpMorphy_GramTab_Builder_Interace $builder) {
-		$this->builder = $builder;
+	protected function __construct(phpMorphy_Storage $storage) {
+		$this->data = unserialize($storage->read(0, $storage->getFileSize()));
 		
-		$data = $this->prepare($raw);
-		
-		if(
-			!is_array($data) ||
-			!isset($data['index']) ||
-			!isset($data['grammems']) ||
-			!isset($data['poses'])
-		) {
+		if(false === $this->data) {
 			throw new phpMorphy_Exception("Broken gramtab data");
 		}
 		
-		$this->index = $data['index'];
-		$this->grammems = $data['grammems'];
-		$this->poses = $data['poses'];
+		$this->grammems = $this->data['grammems'];
+		$this->poses = $this->data['poses'];
+		$this->ancodes = $this->data['ancodes'];
 	}
 	
-	function getFormsCount($ancodes) {
-		return strlen($ancodes) / 2;
+	// TODO: remove this
+	static function create(phpMorphy_Storage $storage) {
+		return new phpMorphy_GramTab($storage);
 	}
 	
-	function splitAncodes($ancodes) {
-		return str_split($ancodes, 2);
-	}
-	
-	function resolve($ancodes) {
-		$result = array();
-		
-		if($ancodes) {
-			foreach(str_split($ancodes, 2) as $ancode) {
-				// make "$result[] = $this->resolveOne($ancode);" inline
-				$index = $this->index[$ancode];
-				
-				$result[] = $this->builder->build(
-					$this->poses[$index & 0xFF],
-					$this->grammems[$index >> 8]
-				);
-				
-			}
+	function getGrammems($ancodeId) {
+		if(!isset($this->ancodes[$ancodeId])) {
+			throw new phpMorphy_Exception("Invalid ancode id '$ancodeId'");
 		}
 		
-		return $this->builder->join($result);
+		return $this->ancodes[$ancodeId]['grammem_ids'];
 	}
-	
-	function resolveOne($ancode, &$pos, &$grammems) {
-		$index = $this->index[$ancode];
+
+	function getPartOfSpeech($ancodeId) {
+		if(!isset($this->ancodes[$ancodeId])) {
+			throw new phpMorphy_Exception("Invalid ancode id '$ancodeId'");
+		}
 		
-		$pos = $this->poses[$index & 0xFF];
-		$grammems = $this->builder->processGrammems($this->grammems[$index >> 8]);
-		/*
-		return $this->builder->build(
-			$this->poses[$index & 0xFF],
-			$this->grammems[$index >> 8]
-		);
-		*/
+		return $this->ancodes[$ancodeId]['pos_id'];
 	}
 	
-	protected function prepare($data) {
-		return unserialize($data);
+	function resolveGrammemIds($ids) {
+		if(is_array($ids)) {
+			$result = array();
+			
+			foreach($ids as $id) {
+				if(!isset($this->grammems[$id])) {
+					throw new phpMorphy_Exception("Invalid grammem id '$id'");
+				}
+				
+				$result[] = $this->grammems[$id]['name'];
+			}
+			
+			return $result;
+		} else {
+			if(!isset($this->grammems[$ids])) {
+				throw new phpMorphy_Exception("Invalid grammem id '$ids'");
+			}
+			
+			return $this->grammems[$ids]['name'];
+		}
 	}
-};
+	
+	function resolvePartOfSpeechId($id) {
+		if(!isset($this->poses[$id])) {
+			throw new phpMorphy_Exception("Invalid part of speech id '$id'");
+		}
+		
+		return $this->poses[$id]['name'];
+	}
+	
+	function includeConsts() {
+		require_once(PHPMORPHY_DIR . '/gramtab_consts.php');
+	}
+}

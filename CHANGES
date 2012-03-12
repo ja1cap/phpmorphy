@@ -1,3 +1,10 @@
+Changes with phpMorphy 0.3.0                                     02 Apr 2009
+    *) new dictionaries format
+    *) mutliencoding support(need dictionary compilation)
+    *) added functionality for control of prediction process
+    *) new enhanced API for deep analisys
+    *) new query: getPartOfSpeech()
+    *) rewritten shared memory cache code
 Changes with phpMorphy 0.2.5                                     12 Jul 2008
     *) Fixed bug: with_gramtab option have no effect; thanks to andreypaa
 Changes with phpMorphy 0.2.4                                     26 May 2008

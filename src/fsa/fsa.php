@@ -88,7 +88,7 @@ interface phpMorphy_Fsa_Interface {
 }
 
 abstract class phpMorphy_Fsa implements phpMorphy_Fsa_Interface {
-	const HEADER_SIZE = 60;
+	const HEADER_SIZE = 128;
 	
 	protected
 		$resource,
@@ -105,7 +105,11 @@ abstract class phpMorphy_Fsa implements phpMorphy_Fsa_Interface {
 	}
 
 	// static
-	static function create(phpMorphy_Storage $storage) {
+	static function create(phpMorphy_Storage $storage, $lazy) {
+        if($lazy) {
+            return new phpMorphy_Fsa_Proxy($storage);
+        }
+        
 		$header = phpMorphy_Fsa::readHeader(
 			$storage->read(0, self::HEADER_SIZE)
 		);
@@ -122,7 +126,7 @@ abstract class phpMorphy_Fsa implements phpMorphy_Fsa_Interface {
 			throw new phpMorphy_Exception('Only sparse or tree fsa`s supported');
 		}
 		
-		$storage_type = phpMorphy_Fsa::getStorageString($storage->getType());
+		$storage_type = $storage->getTypeAsString();
 		$file_path = dirname(__FILE__) . "/access/fsa_{$type}_{$storage_type}.php";
 		$clazz = 'phpMorphy_Fsa_' . ucfirst($type) . '_' . ucfirst($storage_type);
 		
@@ -157,35 +161,11 @@ abstract class phpMorphy_Fsa implements phpMorphy_Fsa_Interface {
 			throw new phpMorphy_Exception('Invalid header string given');
 		}
 		
-		$fields = array(
-			'fourcc' => 'a4',
-			'ver' => 'V',
-			'flags' => 'V',
-			
-			'alphabet_offset' => 'V',
-			'fsa_offset' => 'V',
-			'annot_offset' => 'V',
-			
-			'alphabet_size' => 'V',
-			'transes_count' => 'V',
-			
-			'annot_size_len' => 'V',
-			'annot_chunk_size' => 'V',
-			'annot_chunks_count' => 'V',
-			
-			'char_size' => 'V',
-			'padding_size' => 'V',
-			'dest_size' => 'V',
-			'hash_size' => 'V',
+		$header = unpack(
+			'a4fourcc/Vver/Vflags/Valphabet_offset/Vfsa_offset/Vannot_offset/Valphabet_size/Vtranses_count/Vannot_length_size/' .
+			'Vannot_chunk_size/Vannot_chunks_count/Vchar_size/Vpadding_size/Vdest_size/Vhash_size',
+			$headerRaw
 		);
-		
-		// build line
-		$unpack_str = '';
-		foreach($fields as $k => $v) {
-			$unpack_str .= "$v$k/";
-		}
-		
-		$header = unpack(substr($unpack_str, 0, -1), $headerRaw);
 
 		if(false === $header) {
 			throw new phpMorphy_Exception('Can`t unpack header');
@@ -200,6 +180,8 @@ abstract class phpMorphy_Fsa implements phpMorphy_Fsa_Interface {
 
 		$header['flags'] = $flags;
 		
+		$header['trans_size'] = $header['char_size'] + $header['padding_size'] + $header['dest_size'] + $header['hash_size'];
+		
 		return $header;
 	}
 	
@@ -207,12 +189,12 @@ abstract class phpMorphy_Fsa implements phpMorphy_Fsa_Interface {
 	static protected function validateHeader($header) {
 		if(
 			'meal' != $header['fourcc'] ||
-			2 != $header['ver'] ||
+			3 != $header['ver'] ||
 			$header['char_size'] != 1 ||
 			$header['padding_size'] > 0 ||
 			$header['dest_size'] != 3 ||
 			$header['hash_size'] != 0 ||
-			$header['annot_size_len'] != 1 ||
+			$header['annot_length_size'] != 1 ||
 			$header['annot_chunk_size'] != 1 ||
 			$header['flags']['is_be'] ||
 			$header['flags']['is_hash'] ||
@@ -224,21 +206,6 @@ abstract class phpMorphy_Fsa implements phpMorphy_Fsa_Interface {
 		return true;
 	}
 	
-	// static
-	static protected function getStorageString($type) {
-		$types_map = array(
-			PHPMORPHY_STORAGE_FILE => 'file',
-			PHPMORPHY_STORAGE_MEM => 'mem',
-			PHPMORPHY_STORAGE_SHM => 'shm'
-		);
-		
-		if(!isset($types_map[$type])) {
-			throw new phpMorphy_Exception('Unsupported storage type ' . $storage->getType());
-		}
-		
-		return $types_map[$type];
-	}
-	
 	protected function getRootStateIndex() { return 0; }
 	
 	abstract protected function readRootTrans();
@@ -246,7 +213,7 @@ abstract class phpMorphy_Fsa implements phpMorphy_Fsa_Interface {
 };
 
 class phpMorphy_Fsa_Decorator implements phpMorphy_Fsa_Interface {
-	protected $fsa;
+	//protected $fsa;
 	
 	function phpMorphy_Fsa_Decorator(phpMorphy_Fsa_Interface $fsa) {
 		$this->fsa = $fsa;
@@ -284,3 +251,22 @@ class phpMorphy_Fsa_WordsCollector {
 	function clear() { $this->items = array(); }
 	function getCallback() { return array($this, 'collect'); }
 };
+
+class phpMorphy_Fsa_Proxy extends phpMorphy_Fsa_Decorator {
+	protected $storage;
+	
+	function __construct(phpMorphy_Storage $storage) {
+		$this->storage = $storage;
+	}
+	
+	function __get($propName) {
+		if($propName == 'fsa') {
+			$this->fsa = phpMorphy_Fsa::create($this->storage, false);
+			
+			unset($this->storage);
+			return $this->fsa;
+		}
+		
+		throw new phpMorphy_Exception("Unknown prop name '$propName'");
+	}
+}

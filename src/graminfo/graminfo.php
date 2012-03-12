@@ -25,13 +25,25 @@ interface phpMorphy_GramInfo_Interace {
 	 * Returns langugage for graminfo file
 	 * @return string
 	 */
-	function getLanguage();
+	function getLocale();
 	
 	/**
-	 * Return codepage(encoding) for graminfo file
+	 * Return encoding for graminfo file
 	 * @return string
 	 */
-	function getCodepage();
+	function getEncoding();
+	
+	/**
+	 * Return size of character (cp1251 - 1, utf8 - 1, utf16 - 2, utf32 - 4 etc)
+	 * @return int
+	 */
+	function getCharSize();
+	
+	/**
+	 * Return end of string value (usually string with \0 value of char_size + 1 length)
+	 * @return string
+	 */
+	function getEnds();
 	
 	/**
 	 * Reads graminfo header
@@ -53,16 +65,20 @@ interface phpMorphy_GramInfo_Interace {
 	 * Read flexias section for header retrieved with readGramInfoHeader
 	 *
 	 * @param array $info
-	 * @param bool $onlyBase when TRUE then only base(first) form flexia returned
 	 * @return array
 	 */
-	function readFlexiaData($info, $onlyBase);
+	function readFlexiaData($info);
 	
 	/**
 	 * Read all graminfo headers offsets, which can be used latter for readGramInfoHeader method
 	 * @return array
 	 */
 	function readAllGramInfoOffsets();
+	
+    function getHeader();
+	function readAllPartOfSpeech();
+	function readAllGrammems();
+	function readAllAncodes();
 }
  
 abstract class phpMorphy_GramInfo implements phpMorphy_GramInfo_Interace {
@@ -70,14 +86,23 @@ abstract class phpMorphy_GramInfo implements phpMorphy_GramInfo_Interace {
 	
 	protected
 		$resource,
-		$header;
+		$header,
+		$ends,
+		$ends_size;
 	
 	protected function phpMorphy_GramInfo($resource, $header) {
 		$this->resource = $resource;
 		$this->header = $header;
+		
+		$this->ends = str_repeat("\0", $header['char_size'] + 1);
+		$this->ends_size = strlen($this->ends);
 	}
 	
-	static function create(phpMorphy_Storage $storage) {
+	static function create(phpMorphy_Storage $storage, $lazy) {
+        if($lazy) {
+            return new phpMorphy_GramInfo_Proxy($storage);
+        }
+        
 		$header = phpMorphy_GramInfo::readHeader(
 			$storage->read(0, self::HEADER_SIZE)
 		);
@@ -86,7 +111,7 @@ abstract class phpMorphy_GramInfo implements phpMorphy_GramInfo_Interace {
 			throw new phpMorphy_Exception('Invalid graminfo format');
 		}
 		
-		$storage_type = phpMorphy_GramInfo::getStorageString($storage->getType());
+		$storage_type = $storage->getTypeAsString();
 		$file_path = dirname(__FILE__) . "/access/graminfo_{$storage_type}.php";
 		$clazz = 'phpMorphy_GramInfo_' . ucfirst($storage_type);
 		
@@ -94,34 +119,53 @@ abstract class phpMorphy_GramInfo implements phpMorphy_GramInfo_Interace {
 		return new $clazz($storage->getResource(), $header);
 	}
 	
-	function getLanguage() {
+	function getLocale() {
 		return $this->header['lang'];
 	}
 	
-	function getCodepage() {
-		return $this->header['codepage'];
+	function getEncoding() {
+		return $this->header['encoding'];
 	}
+	
+	function getCharSize() {
+		return $this->header['char_size'];
+	}
+	
+	function getEnds() {
+		return $this->ends;
+	}
+	
+    function getHeader() {
+        return $this->header;
+    }
 	
 	static protected function readHeader($headerRaw) {
 		$header = unpack(
-			'Vver/Vis_be/Vflex_count/Vflex_offset/Vflex_size',
+			'Vver/Vis_be/Vflex_count_old/' .
+			'Vflex_offset/Vflex_size/Vflex_count/Vflex_index_offset/Vflex_index_size/' .
+			'Vposes_offset/Vposes_size/Vposes_count/Vposes_index_offset/Vposes_index_size/' .
+			'Vgrammems_offset/Vgrammems_size/Vgrammems_count/Vgrammems_index_offset/Vgrammems_index_size/' .
+			'Vancodes_offset/Vancodes_size/Vancodes_count/Vancodes_index_offset/Vancodes_index_size/' .
+			'Vchar_size/',
 			$headerRaw
 		);
 		
-		$offset = 20;
+		$offset = 24 * 4;
 		$len = ord(substr($headerRaw, $offset++, 1));
 		$header['lang'] = rtrim(substr($headerRaw, $offset, $len));
 		
+		$offset += $len;
+		
 		$len = ord(substr($headerRaw, $offset++, 1));
-		$header['codepage'] = rtrim(substr($headerRaw, $offset, $len));
+		$header['encoding'] = rtrim(substr($headerRaw, $offset, $len));
 		
 		return $header;
 	}
 	
 	static protected function validateHeader($header) {
 		if(
-			2 != $header['ver'] &&
-			0 == $header['is_be']
+			3 != $header['ver'] ||
+			1 == $header['is_be']
 		) {
 			return false;
 		}
@@ -129,23 +173,36 @@ abstract class phpMorphy_GramInfo implements phpMorphy_GramInfo_Interace {
 		return true;
 	}
 	
-	static protected function getStorageString($type) {
-		$types_map = array(
-			PHPMORPHY_STORAGE_FILE => 'file',
-			PHPMORPHY_STORAGE_MEM => 'mem',
-			PHPMORPHY_STORAGE_SHM => 'shm'
-		);
-		
-		if(!isset($types_map[$type])) {
-			throw new phpMorphy_Exception('Unsupported storage type ' . $storage->getType());
+	protected function cleanupCString($string) {
+		if(false !== ($pos = strpos($string, $this->ends))) {
+			$string = substr($string, 0, $pos);
 		}
 		
-		return $types_map[$type];
+		return $string;
+	}
+	
+	abstract protected function readSectionIndex($offset, $count);
+	
+	protected function readSectionIndexAsSize($offset, $count, $total_size) {
+		if(!$count) {
+			return array();
+		}
+		
+		$index = $this->readSectionIndex($offset, $count);
+		$index[$count] = $index[0] + $total_size;
+		
+		for($i = 0; $i < $count; $i++) {
+			$index[$i] = $index[$i + 1] - $index[$i];
+		}
+		
+		unset($index[$count]);
+		
+		return $index;
 	}
 };
 
 class phpMorphy_GramInfo_Decorator implements phpMorphy_GramInfo_Interace {
-	protected $info;
+	//protected $info;
 	
 	function phpMorphy_GramInfo_Decorator(phpMorphy_GramInfo_Interace $info) {
 		$this->info = $info;
@@ -153,33 +210,90 @@ class phpMorphy_GramInfo_Decorator implements phpMorphy_GramInfo_Interace {
 	
 	function readGramInfoHeader($offset) { return $this->info->readGramInfoHeader($offset); }
 	function readAncodes($info) { return $this->info->readAncodes($info); }
-	function readFlexiaData($info, $onlyBase) { return $this->info->readFlexiaData($info, $onlyBase); }
+	function readFlexiaData($info) { return $this->info->readFlexiaData($info); }
 	function readAllGramInfoOffsets() { return $this->info->readAllGramInfoOffsets(); }
+	function readAllPartOfSpeech() { return $this->info->readAllPartOfSpeech(); }
+	function readAllGrammems() { return $this->info->readAllGrammems(); }
+	function readAllAncodes() { return $this->info->readAllAncodes(); }
 	
-	function getLanguage()  { return $this->info->getLanguage(); }
-	function getCodepage()  { return $this->info->getCodepage(); }
+	function getLocale()  { return $this->info->getLocale(); }
+	function getEncoding()  { return $this->info->getEncoding(); }
+	function getCharSize()	{ return $this->info->getCharSize(); }
+	function getEnds() { return $this->info->getEnds(); }
+    function getHeader() { return $this->info->getHeader(); }
+}
+
+class phpMorphy_GramInfo_Proxy extends phpMorphy_GramInfo_Decorator {
+	protected $storage;
+	
+	function __construct(phpMorphy_Storage $storage) {
+		$this->storage = $storage;
+	}
+	
+	function __get($propName) {
+		if($propName == 'info') {
+			$this->info = phpMorphy_GramInfo::create($this->storage, false);
+			unset($this->storage);
+			return $this->info;
+		}
+		
+		throw new phpMorphy_Exception("Unknown prop name '$propName'");
+	}
+}
+
+class phpMorphy_GramInfo_Proxy_WithHeader extends phpMorphy_GramInfo_Proxy {
+	protected
+		$cache,
+		$ends;
+	
+	function __construct(phpMorphy_Storage $storage, $cacheFile) {
+		parent::__construct($storage);
+		
+		$this->cache = $this->readCache($cacheFile);
+		$this->ends = str_repeat("\0", $this->getCharSize() + 1);
+	}
+	
+	protected function readCache($fileName) {
+		if(!is_array($result = include($fileName))) {
+			throw new phpMorphy_Exception("Can`t get header cache from '$fileName' file'");
+		}
+		
+		return $result;
+	}
+	
+	function getLocale()  {
+		return $this->cache['lang'];
+	}
+	
+	function getEncoding()  {
+		return $this->cache['encoding'];
+	}
+	
+	function getCharSize()	{
+		return $this->cache['char_size'];
+	}
+	
+	function getEnds() {
+		return $this->ends;
+	}
+	
+    function getHeader() {
+    	return $this->cache;
+    }
 }
 
 class phpMorphy_GramInfo_RuntimeCaching extends phpMorphy_GramInfo_Decorator {
 	protected
-		$flexia_all = array(),
-		$flexia_base = array();
+		$flexia = array(),
+		$ancodes = array();
 	
-	function readFlexiaData($info, $onlyBase) {
+	function readFlexiaData($info) {
 		$offset = $info['offset'];
 		
-		if($onlyBase) {
-			if(!isset($this->flexia_base[$offset])) {
-				$this->flexia_base[$offset] = $this->info->readFlexiaData($info, $onlyBase);
-			}
-			
-			return $this->flexia_base[$offset];
-		} else {
-			if(!isset($this->flexia_all[$offset])) {
-				$this->flexia_all[$offset] = $this->info->readFlexiaData($info, $onlyBase);
-			}
-			
-			return $this->flexia_all[$offset];
+		if(!isset($this->flexia_all[$offset])) {
+			$this->flexia_all[$offset] = $this->info->readFlexiaData($info);
 		}
+		
+		return $this->flexia_all[$offset];
 	}
 }
