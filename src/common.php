@@ -31,7 +31,7 @@ require_once(PHPMORPHY_DIR . '/storage.php');
 
 class phpMorphy_Exception extends Exception { }
 
-interface phpMorphy_IFilesBundle {
+interface phpMorphy_FilesBundle_Interface {
 	/**
 	 * Returns common automat file name
 	 * @return string
@@ -57,9 +57,10 @@ interface phpMorphy_IFilesBundle {
 	function getGramTabFile();
 }
 
-class phpMorphy_FilesBundle implements phpMorphy_IFilesBundle {
-	 var $dir;
-	 var $lang;
+class phpMorphy_FilesBundle implements phpMorphy_FilesBundle_Interface {
+	protected
+		$dir,
+		$lang;
 
 	function phpMorphy_FilesBundle($dirName, $lang) {
 		$this->dir = $dirName;
@@ -88,15 +89,16 @@ class phpMorphy_FilesBundle implements phpMorphy_IFilesBundle {
 };
 
 class phpMorphy {
-	var $options;
-	var $common_fsa;
-	var $graminfo;
-	var $gramtab;
-	var $single_morphier;
-	var $bulk_morphier;
-	var $predict_morphier;
+	protected
+		$options,
+		$common_fsa,
+		$graminfo,
+		$gramtab,
+		$single_morphier,
+		$bulk_morphier,
+		$predict_morphier;
 	
-	function phpMorphy(phpMorphy_IFilesBundle $filesBundle, array $options = null) {
+	function phpMorphy(phpMorphy_FilesBundle_Interface $filesBundle, array $options = null) {
 		$options = $this->repairOptions($options);
 		$this->options = $options;
 		$this->bundle = $filesBundle;

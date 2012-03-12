@@ -20,7 +20,7 @@
  * Boston, MA 02111-1307, USA.
  */
 
-interface phpMorphy_IFsa {
+interface phpMorphy_Fsa_Interface {
 	/**
 	 * Return root transition of fsa
 	 * @return array
@@ -87,14 +87,15 @@ interface phpMorphy_IFsa {
 	function unpackTranses($rawTranses);
 }
 
-abstract class phpMorphy_Fsa implements phpMorphy_IFsa {
+abstract class phpMorphy_Fsa implements phpMorphy_Fsa_Interface {
 	const HEADER_SIZE = 60;
 	
-	var $resource;
-	var $header;
-	var $fsa_start;
-	var $root_trans;
-	var $alphabet;	
+	protected
+		$resource,
+		$header,
+		$fsa_start,
+		$root_trans,
+		$alphabet;	
 	
 	protected function phpMorphy_Fsa($resource, $header) {
 		$this->resource = $resource;
@@ -244,10 +245,10 @@ abstract class phpMorphy_Fsa implements phpMorphy_IFsa {
 	abstract protected function readAlphabet();
 };
 
-class phpMorphy_Fsa_Decorator implements phpMorphy_IFsa {
-	var $fsa;
+class phpMorphy_Fsa_Decorator implements phpMorphy_Fsa_Interface {
+	protected $fsa;
 	
-	function phpMorphy_Fsa_Decorator(phpMorphy_IFsa $fsa) {
+	function phpMorphy_Fsa_Decorator(phpMorphy_Fsa_Interface $fsa) {
 		$this->fsa = $fsa;
 	}
 	
@@ -262,8 +263,9 @@ class phpMorphy_Fsa_Decorator implements phpMorphy_IFsa {
 };
 
 class phpMorphy_Fsa_WordsCollector {
-	var $items = array();
-	var $limit;
+	protected
+		$items = array(),
+		$limit;
 	
 	function phpMorphy_Fsa_WordsCollector($collectLimit) {
 		$this->limit = $collectLimit;

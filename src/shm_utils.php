@@ -21,9 +21,10 @@
  */
 
 class ShmFileManager {
-	var $file_path;
-	var $salt;
-	var $cache;
+	protected
+		$file_path,
+		$salt,
+		$cache;
 	
 	function ShmFileManager($filePath, $salt = '*') {
 		$this->file_path = $filePath;

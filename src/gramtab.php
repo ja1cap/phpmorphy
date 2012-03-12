@@ -20,7 +20,7 @@
  * Boston, MA 02111-1307, USA.
  */
 
-interface phpMorphy_GramTab_IBuilder {
+interface phpMorphy_GramTab_Builder_Interace {
 	/**
 	 * Build gramifo string from part of speech and grammems string
 	 *
@@ -39,7 +39,7 @@ interface phpMorphy_GramTab_IBuilder {
 	function join($strings);
 }
  
-class phpMorphy_GramTab_StandartBuilder implements phpMorphy_GramTab_IBuilder {
+class phpMorphy_GramTab_StandartBuilder implements phpMorphy_GramTab_Builder_Interace {
 	function build($pos, $grammems) {
 		if($pos) {
 			return "$pos $grammems";
@@ -54,12 +54,13 @@ class phpMorphy_GramTab_StandartBuilder implements phpMorphy_GramTab_IBuilder {
 };
 
 class phpMorphy_GramTab {
-	var $index;
-	var $poses;
-	var $grammems;
-	var $builder;
+	protected
+		$index,
+		$poses,
+		$grammems,
+		$builder;
 	
-	function phpMorphy_GramTab($raw, phpMorphy_GramTab_IBuilder $builder) {
+	function phpMorphy_GramTab($raw, phpMorphy_GramTab_Builder_Interace $builder) {
 		$this->builder = $builder;
 		
 		$data = $this->prepare($raw);

@@ -4,8 +4,9 @@ define('PHPMORPHY_STORAGE_MEM',		'mem');
 define('PHPMORPHY_STORAGE_SHM',		'shm');
 
 abstract class phpMorphy_Storage {
-	var $file_name;
-	var $resource;
+	protected
+		$file_name,
+		$resource;
 	
 	// private ctor
 	protected function phpMorphy_Storage($fileName) {
@@ -84,8 +85,9 @@ class phpMorphy_Storage_Mem extends phpMorphy_Storage {
 }
 
 class phpMorphy_Storage_Shm extends phpMorphy_Storage {
-	var $manager;
-	var $file_size;
+	protected
+		$manager,
+		$file_size;
 	
 	function getFileSize() {
 		return $this->file_size;

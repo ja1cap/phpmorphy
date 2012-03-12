@@ -21,9 +21,10 @@
  */
 
 class phpMorphy_Link_Base {
-	var $fsa;
-	var $trans;
-	var $raw_trans;
+	protected
+		$fsa,
+		$trans,
+		$raw_trans;
 	
 	function phpMorphy_Link_Base(&$fsa, $trans, $rawTrans) {
 		$this->fsa =& $fsa;
@@ -66,9 +67,10 @@ class phpMorphy_Link_Annot extends phpMorphy_Link_Base {
 };
 
 class phpMorphy_State {
-	var $fsa;
-	var $transes;
-	var $raw_transes;
+	protected
+		$fsa,
+		$transes,
+		$raw_transes;
 	
 	function phpMorphy_State(&$fsa, $index) {
 		$this->fsa =& $fsa;

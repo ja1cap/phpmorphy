@@ -1,3 +1,7 @@
+Changes with phpMorphy 0.2.3                                     02 Aug 2007
+    *) Remove all var stuff from source code(now really E_STRICT compatible, i hope =])
+    *) Rename all interfaces to {interface name}_Interface(old version is: phpMorphy_I{interface name})
+
 Changes with phpMorphy 0.2.2                                     24 Jun 2007
     *) Remove php4 support
     *) Fully E_STRICT compatible

@@ -20,7 +20,7 @@
  * Boston, MA 02111-1307, USA.
  */
 
-interface phpMorphy_IGramInfo {
+interface phpMorphy_GramInfo_Interace {
 	/**
 	 * Returns langugage for graminfo file
 	 * @return string
@@ -65,11 +65,12 @@ interface phpMorphy_IGramInfo {
 	function readAllGramInfoOffsets();
 }
  
-abstract class phpMorphy_GramInfo implements phpMorphy_IGramInfo {
+abstract class phpMorphy_GramInfo implements phpMorphy_GramInfo_Interace {
 	const HEADER_SIZE = 128;
 	
-	var $resource;
-	var $header;
+	protected
+		$resource,
+		$header;
 	
 	protected function phpMorphy_GramInfo($resource, $header) {
 		$this->resource = $resource;
@@ -143,10 +144,10 @@ abstract class phpMorphy_GramInfo implements phpMorphy_IGramInfo {
 	}
 };
 
-class phpMorphy_GramInfo_Decorator implements phpMorphy_IGramInfo {
-	var $info;
+class phpMorphy_GramInfo_Decorator implements phpMorphy_GramInfo_Interace {
+	protected $info;
 	
-	function phpMorphy_GramInfo_Decorator(phpMorphy_IGramInfo $info) {
+	function phpMorphy_GramInfo_Decorator(phpMorphy_GramInfo_Interace $info) {
 		$this->info = $info;
 	}
 	
@@ -160,8 +161,9 @@ class phpMorphy_GramInfo_Decorator implements phpMorphy_IGramInfo {
 }
 
 class phpMorphy_GramInfo_RuntimeCaching extends phpMorphy_GramInfo_Decorator {
-	var $flexia_all = array();
-	var $flexia_base = array();
+	protected
+		$flexia_all = array(),
+		$flexia_base = array();
 	
 	function readFlexiaData($info, $onlyBase) {
 		$offset = $info['offset'];

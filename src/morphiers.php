@@ -20,7 +20,7 @@
  * Boston, MA 02111-1307, USA.
  */
 
-interface phpMorphy_IMorphier {
+interface phpMorphy_Morphier_Interface {
 	function getBaseForm($word);
 	function getAllForms($word);
 	function getAllFormsWithGramInfo($word);
@@ -31,12 +31,13 @@ interface phpMorphy_IMorphier {
  * Base class for all morphiers
  * @abstract 
  */
-abstract class phpMorphy_Morphier_Base implements phpMorphy_IMorphier {
-	var $graminfo;
-	var $fsa;
-	var $root_trans;
+abstract class phpMorphy_Morphier_Base implements phpMorphy_Morphier_Interface {
+	protected
+		$graminfo,
+		$fsa,
+		$root_trans;
 	
-	function phpMorphy_Morphier_Base(phpMorphy_IFsa $fsa, phpMorphy_IGramInfo $graminfo) {
+	function phpMorphy_Morphier_Base(phpMorphy_Fsa_Interface $fsa, phpMorphy_GramInfo_Interace $graminfo) {
 		$this->fsa = $fsa;
 		$this->graminfo = $graminfo;
 		$this->root_trans = $fsa->getRootTrans();
@@ -161,11 +162,12 @@ abstract class phpMorphy_Morphier_Base implements phpMorphy_IMorphier {
 
 // TODO: This can`t extends phpMorphy_Morphier_Base, refactor it!
 abstract class phpMorphy_Morphier_Dict extends phpMorphy_Morphier_Base {
-	var $predict;
-	var $single_morphier;
-	var $bulk_morphier;
+	protected
+		$predict,
+		$single_morphier,
+		$bulk_morphier;
 	
-	function phpMorphy_Morphier_Dict(phpMorphy_IFsa $fsa, phpMorphy_IGramInfo $graminfo, phpMorphy_IMorphier $predict) {
+	function phpMorphy_Morphier_Dict(phpMorphy_Fsa_Interface $fsa, phpMorphy_GramInfo_Interace $graminfo, phpMorphy_Morphier_Interface $predict) {
 		parent::phpMorphy_Morphier_Base($fsa, $graminfo);
 		$this->predict = $predict;
 		
@@ -192,11 +194,11 @@ abstract class phpMorphy_Morphier_Dict extends phpMorphy_Morphier_Base {
 		}
 	}
 	
-	protected function createSingle(phpMorphy_IFsa $fsa, phpMorphy_IGramInfo $graminfo, phpMorphy_IMorphier $predict) {
+	protected function createSingle(phpMorphy_Fsa_Interface $fsa, phpMorphy_GramInfo_Interace $graminfo, phpMorphy_Morphier_Interface $predict) {
 		return new phpMorphy_Morphier_DictSingle($fsa, $graminfo, $predict);
 	}
 	
-	protected function createBulk(phpMorphy_IFsa $fsa, phpMorphy_IGramInfo $graminfo, phpMorphy_IMorphier $predict) {
+	protected function createBulk(phpMorphy_Fsa_Interface $fsa, phpMorphy_GramInfo_Interace $graminfo, phpMorphy_Morphier_Interface $predict) {
 		return new phpMorphy_Morphier_DictBulk($fsa, $graminfo, $predict);
 	}
 }
@@ -224,9 +226,9 @@ abstract class phpMorphy_Morphier_Common extends phpMorphy_Morphier_Base {
 }
 
 class phpMorphy_Morphier_DictBulk extends phpMorphy_Morphier_Common {
-	var $predict;
+	protected $predict;
 	
-	function phpMorphy_Morphier_DictBulk(phpMorphy_IFsa $fsa, phpMorphy_IGramInfo $graminfo, phpMorphy_IMorphier $predict) {
+	function phpMorphy_Morphier_DictBulk(phpMorphy_Fsa_Interface $fsa, phpMorphy_GramInfo_Interace $graminfo, phpMorphy_Morphier_Interface $predict) {
 		parent::phpMorphy_Morphier_Common($fsa, $graminfo);
 		$this->predict = $predict;
 	}
@@ -431,10 +433,11 @@ class phpMorphy_Morphier_DictSingle extends phpMorphy_Morphier_Common {
 };
 
 class phpMorphy_Morphier_PredictBySuffix extends phpMorphy_Morphier_Common {
-	var $min_suf_len;
-	var $unknown_len;
+	protected
+		$min_suf_len,
+		$unknown_len;
 	
-	function phpMorphy_Morphier_PredictBySuffix(phpMorphy_IFsa $fsa, phpMorphy_IGramInfo $graminfo, $minimalSuffixLength = 4) {
+	function phpMorphy_Morphier_PredictBySuffix(phpMorphy_Fsa_Interface $fsa, phpMorphy_GramInfo_Interace $graminfo, $minimalSuffixLength = 4) {
 		parent::phpMorphy_Morphier_Base($fsa, $graminfo);
 		
 		$this->min_suf_len = $minimalSuffixLength;
@@ -475,8 +478,9 @@ class phpMorphy_Morphier_PredictBySuffix extends phpMorphy_Morphier_Common {
 };
 
 class phpMorphy_PredictMorphier_Collector extends phpMorphy_Fsa_WordsCollector {
-	var $used_poses = array();
-	var $collected = 0;
+	protected
+		$used_poses = array(),
+		$collected = 0;
 	
 	function collect($path, $annotRaw) {
 		if($this->collected > $this->limit) {
@@ -534,10 +538,11 @@ class phpMorphy_PredictMorphier_Collector extends phpMorphy_Fsa_WordsCollector {
 };
 
 class phpMorphy_Morphier_PredictByDatabse extends phpMorphy_Morphier_Base {
-	var $collector;
-	var $min_postfix_match;
+	protected
+		$collector,
+		$min_postfix_match;
 	
-	function phpMorphy_Morphier_PredictByDatabse(phpMorphy_IFsa $fsa, phpMorphy_IGramInfo $graminfo, $minPostfixMatch = 2, $collectLimit = 32) {
+	function phpMorphy_Morphier_PredictByDatabse(phpMorphy_Fsa_Interface $fsa, phpMorphy_GramInfo_Interace $graminfo, $minPostfixMatch = 2, $collectLimit = 32) {
 		parent::phpMorphy_Morphier_Base($fsa, $graminfo);
 		
 		$this->min_postfix_match = $minPostfixMatch;
@@ -596,10 +601,10 @@ class phpMorphy_Morphier_PredictByDatabse extends phpMorphy_Morphier_Base {
 	}
 };
 
-class phpMorphy_Morphier_Decorator implements phpMorphy_IMorphier {
-	var $morphier;
+class phpMorphy_Morphier_Decorator implements phpMorphy_Morphier_Interface {
+	protected $morphier;
 	
-	function phpMorphy_Morphier_Decorator(phpMorphy_IMorphier $morphier) {
+	function phpMorphy_Morphier_Decorator(phpMorphy_Morphier_Interface $morphier) {
 		$this->morphier = $morphier;
 	}
 	
@@ -615,10 +620,11 @@ class phpMorphy_Morphier_Decorator implements phpMorphy_IMorphier {
 }
 
 class phpMorphy_Morphier_WithGramTab extends phpMorphy_Morphier_Decorator {
-	var $gramtab;
-	var $file_name;
+	protected
+		$gramtab,
+		$file_name;
 	
-	function phpMorphy_Morphier_WithGramTab(phpMorphy_IMorphier $morphier, phpMorphy_GramTab $gramtab) {
+	function phpMorphy_Morphier_WithGramTab(phpMorphy_Morphier_Interface $morphier, phpMorphy_GramTab $gramtab) {
 		parent::phpMorphy_Morphier_Decorator($morphier);
 		$this->gramtab = $gramtab;
 	}
@@ -654,11 +660,12 @@ class phpMorphy_Morphier_WithGramTabBulk extends phpMorphy_Morphier_WithGramTab 
 	}
 }
 
-class phpMorphy_Morphier_Chain implements phpMorphy_IMorphier {
-	var $morphiers = array();
+class phpMorphy_Morphier_Chain implements phpMorphy_Morphier_Interface {
+	protected
+		$morphiers = array();
 	
 	function getMorphiers() { return $this->morphiers; }
-	function add(phpMorphy_IMorphier $morphier) { $this->morphiers[] = $morphier; }
+	function add(phpMorphy_Morphier_Interface $morphier) { $this->morphiers[] = $morphier; }
 	
 	function getBaseForm($word) {
 		return $this->invoke('getBaseForm', $word);
