@@ -1,3 +1,8 @@
+Changes with phpMorphy 0.3.6                                     06 Sep 2009
+    *) getGramInfo(), getGramInfoMergeForms(), getAncode() returns distinct descriptors
+    *) Add new method castFormByAncode()
+    *) More accurate work with indeclinable words
+    *) castFormByPattern() now recieve grammems to compare for each part of speech
 Changes with phpMorphy 0.3.5                                     31 Aug 2009
     *) Add new methods getGramInfo, getGramInfoMergeForms, getAllFormsWithAncodes, castFormByGramInfo, castFormByPattern
     *) getAllFormsWithGramInfo signature changed, second argument is (bool)$asText now

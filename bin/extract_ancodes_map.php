@@ -46,6 +46,7 @@ try {
 
         unset($ancode); // remove reference from array
     }
+    unset($ancode);
 
     file_put_contents($out_file, serialize($ancodes_map));
 } catch (Exception $e) {

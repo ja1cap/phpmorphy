@@ -30,6 +30,7 @@ require_once(PHPMORPHY_DIR . '/morphiers.php');
 require_once(PHPMORPHY_DIR . '/gramtab.php');
 require_once(PHPMORPHY_DIR . '/storage.php');
 require_once(PHPMORPHY_DIR . '/source.php');
+require_once(PHPMORPHY_DIR . '/langs_stuff/common.php');
 
 class phpMorphy_Exception extends Exception { }
 
@@ -220,7 +221,21 @@ class phpMorphy {
     function getLocale() {
         return $this->helper->getGramInfo()->getLocale();
     }
+
+    /**
+     * @return phpMorphy_GrammemsProvider_Base
+     */
+    function getGrammemsProvider() {
+        return clone $this->__grammems_provider;
+    }
     
+    /**
+     * @return phpMorphy_GrammemsProvider_Base
+     */
+    function getDefaultGrammemsProvider() {
+        return $this->__grammems_provider;
+    }
+
     /**
     * @return phpMorphy_Shm_Cache
     */
@@ -370,29 +385,52 @@ class phpMorphy {
         return $this->invoke('getGrammarInfoMergeForms', $word, $type);
     }
     
-    protected function getAnnotForWord($word) {
-        if(false === ($annots = $this->__common_morphier->getAnnot($word))) {
-            if($type !== self::IGNORE_PREDICT) {
-                return $this->predictWord('getAnnot', $word);
-            }
-        } else {
-            return $annots;
-        }
-        
-        return false;
+    protected function getAnnotForWord($word, $type) {
+        return $this->invoke('getAnnot', $word, $type);
     }
     
     /**
     * @param string $word
-    * @param mixed $partOfSpeech
-    * @param array $grammems
-    * @param mixed $type
+    * @param mixed $ancode
+    * @param mixed $commonAncode
     * @param bool $returnOnlyWord
     * @param mixed $callback
+    * @param mixed $type
+    * @return array
+    */
+    function castFormByAncode($word, $ancode, $commonAncode = null, $returnOnlyWord = false, $callback = null, $type = self::NORMAL) {
+        $resolver = $this->helper->getAncodesResolver();
+
+        $common_ancode_id = $resolver->unresolve($commonAncode);
+        $ancode_id = $resolver->unresolve($ancode);
+
+        $data = $this->helper->getGrammemsAndPartOfSpeech($ancode_id);
+
+        if(isset($common_ancode_id)) {
+            $data[1] = array_merge($data[1], $this->helper->getGrammems($common_ancode_id));
+        }
+
+        return $this->castFormByGramInfo(
+            $word,
+            $data[0],
+            $data[1],
+            $returnOnlyWord,
+            $callback,
+            $type
+        );
+    }
+
+    /**
+    * @param string $word
+    * @param mixed $partOfSpeech
+    * @param array $grammems
+    * @param bool $returnOnlyWord
+    * @param mixed $callback
+    * @param mixed $type
     * @return array
     */
     function castFormByGramInfo($word, $partOfSpeech, $grammems, $returnOnlyWord = false, $callback = null, $type = self::NORMAL) {
-        if(false === ($annot = $this->getAnnotForWord($word))) {
+        if(false === ($annot = $this->getAnnotForWord($word, $type))) {
             return false;
         }
         
@@ -402,27 +440,41 @@ class phpMorphy {
     /**
     * @param string $word
     * @param string $patternWord
-    * @param mixed $type
+    * @param mixed $essentialGrammems
     * @param bool $returnOnlyWord
     * @param mixed $callback
+    * @param mixed $type
     * @return array
     */
-    function castFormByPattern($word, $patternWord, $returnOnlyWord = false, $callback = null, $type = self::NORMAL) {
-        if(false === ($word_annot = $this->getAnnotForWord($word))) {
+    function castFormByPattern($word, $patternWord, phpMorphy_GrammemsProvider_Interface $grammemsProvider = null, $returnOnlyWord = false, $callback = null, $type = self::NORMAL) {
+        if(false === ($word_annot = $this->getAnnotForWord($word, $type))) {
             return false;
         }
         
+        if(!isset($grammemsProvider)) {
+            $grammemsProvider = $this->__grammems_provider;
+        }
+
         $result = array();
 
-        foreach($this->getGrammarInfo($patternWord, $type) as $paradigm) {
+        foreach($this->getGramInfo($patternWord, $type) as $paradigm) { 
             foreach($paradigm as $grammar) {
+                $pos = $grammar['pos'];
+
+                $essential_grammems = $grammemsProvider->getGrammems($pos);
+
+                $grammems =  false !== $essential_grammems ? 
+                    array_intersect($grammar['grammems'], $essential_grammems):
+                    $grammar['grammems'];
+
                 $res = $this->helper->castFormByGramInfo(
                     $word,
                     $word_annot,
-                    $grammar['pos'],
-                    $grammar['grammems'],
-                    $returnWords,
-                    $callback
+                    $pos,
+                    $grammems,
+                    $returnOnlyWord,
+                    $callback,
+                    $type
                 );
 
                 if(count($res)) {
@@ -430,8 +482,8 @@ class phpMorphy {
                 }
             }
         }
-        
-        return $result;
+
+        return $returnOnlyWord ? array_unique($result) : $result;
     }
     
     // public interface end
@@ -639,6 +691,9 @@ class phpMorphy {
             case '__word_descriptor_serializer':
                 $this->__word_descriptor_serializer = $this->createWordDescriptorSerializer();
                 break;
+            case '__grammems_provider':
+                $this->__grammems_provider = $this->createGrammemsProvider();
+                break;
             default:
                 throw new phpMorphy_Exception("Invalid prop name '$name'");
         }
@@ -649,6 +704,10 @@ class phpMorphy {
     ////////////////////
     // factory methods
     ////////////////////
+    function createGrammemsProvider() {
+        return phpMorphy_GrammemsProvider_Factory::create($this);
+    }
+
     protected function createWordDescriptorSerializer() {
         return new phpMorphy_WordDescriptor_Collection_Serializer();
     }

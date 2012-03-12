@@ -248,7 +248,8 @@ class phpMorphy_AncodesResolver_ToText implements phpMorphy_AncodesResolver_Inte
     }
 
     function unresolve($ancode) {
-        throw new phpMorphy_Exception("Can`t convert grammar info in text into ancode id");
+        return $this->gramtab->stringToAncode($ancode);
+        //throw new phpMorphy_Exception("Can`t convert grammar info in text into ancode id");
     }
 }
 
@@ -490,6 +491,10 @@ class phpMorphy_Morphier_Helper {
             return false;
         }
 
+        if(isset($callback) && !is_callable($callback)) {
+            throw new phpMorphy_Exception("Invalid callback given");
+        }
+        
         $result = array();
         $grammems = (array)$grammems;
         $partOfSpeech = isset($partOfSpeech) ? (string)$partOfSpeech : null;
@@ -534,7 +539,7 @@ class phpMorphy_Morphier_Helper {
                     }
 
                     if($returnWords) {
-                        $result[] = $form;
+                        $result[$form] = 1;
                     } else {
                         $result[] = array(
                             'form' => $form,
@@ -551,7 +556,7 @@ class phpMorphy_Morphier_Helper {
             }
         }
 
-        return $result;
+        return $returnWords ? array_keys($result) : $result;
     }
 
     function getAncode($annots) {
@@ -573,8 +578,29 @@ class phpMorphy_Morphier_Helper {
             );
         }
 
-        return $result;
+        return $this->array_unique($result);
     }
+
+    protected static function array_unique($array) {
+        static $need_own;
+
+        if(!isset($need_own)) { 
+            $need_own = -1 === version_compare(PHP_VERSION, '5.2.9');
+        }
+
+        if($need_own) {
+            $result = array();
+
+            foreach(array_keys(array_unique(array_map('serialize', $array))) as $key) {
+                $result[$key] = $array[$key];
+            }
+
+            return $result;
+        } else {
+            return array_unique($array, SORT_REGULAR);
+        }
+    }
+
 
     function getGrammarInfoMergeForms($annots) {
         if(false === $annots) {
@@ -596,17 +622,20 @@ class phpMorphy_Morphier_Helper {
                 $forms_count++;
             }
 
+            $grammems = array_unique($grammems);
+            sort($grammems);
+
             $result[] = array(
                 // part of speech identical across all joined forms
                 'pos' => $this->gramtab->getPartOfSpeech($ancode),
-                'grammems' => array_unique($grammems),
+                'grammems' => $grammems,
                 'forms_count' => $forms_count,
                 'form_no_low' => $form_no,
                 'form_no_high' => $form_no + $forms_count,
             );
         }
 
-        return $result;
+        return $this->array_unique($result);
     }
 
     function getGrammarInfo($annots) {
@@ -625,17 +654,28 @@ class phpMorphy_Morphier_Helper {
 
             $form_no = $annot['form_no'];
             foreach($all_ancodes[$form_no] as $ancode) {
-                $info[] = array(//$this->gramtab->toString($ancode, $common_ancode);
+                $grammems = //array_unique(
+                    array_merge($common_grammems, $this->gramtab->getGrammems($ancode));
+                //);
+
+                sort($grammems);
+
+                $info_item = array(
                     'pos' => $this->gramtab->getPartOfSpeech($ancode),
-                    'grammems' => array_merge($common_grammems, $this->gramtab->getGrammems($ancode)),
+                    'grammems' => $grammems,
                     'form_no' => $form_no,
                 );
+
+
+                $info[] = $info_item;
             }
 
-            $result[] = $info;
+            $unique_info = $this->array_unique($info);
+            sort($unique_info);
+            $result[] = $unique_info;
         }
 
-        return $result;
+        return $this->array_unique($result);
     }
 
     function getAllFormsWithResolvedAncodes($word, $annots, $resolveType = 'no_resolve') {

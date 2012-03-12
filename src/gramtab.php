@@ -27,6 +27,7 @@ interface phpMorphy_GramTab_Interface {
     function resolvePartOfSpeechId($id);
     function includeConsts();
     function ancodeToString($ancodeId, $commonAncode = null);
+    function stringToAncode($string);
     function toString($partOfSpeechId, $grammemIds);
 }
 
@@ -37,6 +38,7 @@ class phpMorphy_GramTab_Empty implements phpMorphy_GramTab_Interface {
     function resolvePartOfSpeechId($id) { return ''; }
     function includeConsts() { }
     function ancodeToString($ancodeId, $commonAncode = null) { return ''; }
+    function stringToAncode($string) { return null; }
     function toString($partOfSpeechId, $grammemIds) { return ''; }
 }
 
@@ -71,6 +73,10 @@ class phpMorphy_GramTab_Proxy implements phpMorphy_GramTab_Interface {
         return $this->__obj->ancodeToString($ancodeId, $commonAncode);
     }
     
+    function stringToAncode($string) {
+        return $this->__obj->stringToAncode($string);
+    }
+
     function toString($partOfSpeechId, $grammemIds) {
         return $this->__obj->toString($partOfSpeechId, $grammemIds);
     }
@@ -92,6 +98,7 @@ class phpMorphy_GramTab implements phpMorphy_GramTab_Interface {
         $data,
         $ancodes,
         $grammems,
+        // $__ancodes_map,
         $poses;
     
     protected function __construct(phpMorphy_Storage $storage) {
@@ -172,7 +179,44 @@ class phpMorphy_GramTab implements phpMorphy_GramTab_Interface {
             implode(',', $this->getGrammems($ancodeId));
     }
 
+    protected function findAncode($partOfSpeech, $grammems) {
+    }
+
+    function stringToAncode($string) {
+        if(!isset($string)) {
+            return null;
+        }
+
+        if(!isset($this->__ancodes_map[$string])) {
+            throw new phpMorphy_Exception("Ancode with '$string' graminfo not found");
+        }
+
+        return $this->__ancodes_map[$string];
+    }
+
     function toString($partOfSpeechId, $grammemIds) {
         return $partOfSpeechId . ' ' . implode(',', $grammemIds);
+    }
+
+    protected function buildAncodesMap() {
+        $result = array();
+
+        foreach($this->ancodes as $ancode_id => $data) {
+            $key = $this->toString($data['pos_id'], $data['grammem_ids']);
+
+            $result[$key] = $ancode_id;
+        }
+
+        return $result;
+    }
+
+    function __get($propName) {
+        switch($propName) {
+            case '__ancodes_map':
+                $this->__ancodes_map = $this->buildAncodesMap();
+                return $this->__ancodes_map;
+        }
+
+        throw new phpMorphy_Exception("Unknown '$propName' property");
     }
 }

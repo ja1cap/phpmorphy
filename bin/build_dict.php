@@ -15,6 +15,37 @@ function doError($msg) {
     exit(1);
 }
 
+class ShellArgsEscaper {
+    protected static $need_wrap;
+
+    static function escape($arg) {
+        if(!isset(self::$need_wrap)) {
+            self::$need_wrap = self::needWrap();
+        }
+
+        if(self::$need_wrap) {
+            // double slashes at end of argument
+            $orig_len = strlen($arg);
+            $slashes = $orig_len - strlen(rtrim($arg, '\\'));
+            $arg .= str_repeat('\\', $slashes);
+        }
+
+        return escapeshellarg($arg);
+    }
+
+    static protected function needWrap() {
+        if(substr(PHP_OS, 0, 3) == 'WIN') {
+            $test = '\a\b\c\\';
+
+            $result = escapeshellarg($test);
+
+            return substr($result, -3, 2) != '\\\\';
+        }
+
+        return false;
+    }
+}
+
 function doExec($title, $file, $args) {
     echo $title . "\n";
     
@@ -23,10 +54,10 @@ function doExec($title, $file, $args) {
     $cmd = '';
     switch(strtolower($ext)) {
         case 'php':
-            $cmd = PHP_BIN . ' -f ' . escapeshellarg($file) . ' --';
+            $cmd = PHP_BIN . ' -f ' . ShellArgsEscaper::escape($file) . ' --';
             break;
         default:
-            $cmd = escapeshellarg($file);
+            $cmd = ShellArgsEscaper::escape($file);
             
     }
     
@@ -37,9 +68,9 @@ function doExec($title, $file, $args) {
             }
         } else {
             if(is_string($k)) {
-                $cmd .= ' ' . $k . '=' . escapeshellarg($v);
+                $cmd .= ' ' . $k . '=' . ShellArgsEscaper::escape($v);
             } else {
-                $cmd .= ' ' . escapeshellarg($v);
+                $cmd .= ' ' . ShellArgsEscaper::escape($v);
             }
         }
     }
@@ -116,7 +147,7 @@ echo "Found '$locale' locale in $argv[1]\n";
 $args = array(
     '--xml' => $argv[1],
     '--out-dir' => $argv[2],
-    '--out-encoding2' => $argv[3],
+    '--out-encoding' => $argv[3],
     '--force-encoding-single-byte' => null,
     '--verbose' => null,
     '--case' => 'upper',

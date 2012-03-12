@@ -39,6 +39,7 @@ if(function_exists('iconv')) {
     foreach($words as &$word) {
         $word = iconv('windows-1251', $morphy->getEncoding(), $word);
     }
+    unset($word);
 }
 
 try {
