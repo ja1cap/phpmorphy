@@ -130,7 +130,7 @@ class phpMorphy_GrammemsProvider_Factory {
     protected static $included = array();
 
     static function create(phpMorphy $morphy) {
-        $locale = strtolower($morphy->getLocale());
+        $locale = $GLOBALS['__phpmorphy_strtolower']($morphy->getLocale());
         
         if(!isset(self::$included[$locale])) {
             $file_name = PHPMORPHY_DIR . "/langs_stuff/$locale.php";

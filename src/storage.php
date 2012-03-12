@@ -42,9 +42,13 @@ abstract class phpMorphy_Storage {
             throw new phpMorphy_Exception("Can`t read $len bytes beyond end of '" . $this->getFileName() . "' file, offset = $offset, file_size = " . $this->getFileSize());
         }
 
-        $result = $this->readUnsafe($offset, $len);
+        try {
+            $result = $this->readUnsafe($offset, $len);
+        } catch (Exception $e) {
+            throw new phpMorphy_Exception("Can`t read $len bytes at $offset offset, from '" . $this->getFileName() . "' file: " . $e->getMessage());
+        }
 
-        if($exactLength && strlen($result) < $len) {
+        if($exactLength && $GLOBALS['__phpmorphy_strlen']($result) < $len) {
             throw new phpMorphy_Exception("Can`t read $len bytes at $offset offset, from '" . $this->getFileName() . "' file");
         }
             
@@ -103,8 +107,11 @@ class phpMorphy_Storage_File extends phpMorphy_Storage {
     }
     
     function readUnsafe($offset, $len) {
-        fseek($this->resource, $offset);
-                return fread($this->resource, $len);
+        if(0 !== fseek($this->resource, $offset)) {
+            throw new phpMorphy_Exception("Can`t seek to $offset offset");
+        }
+
+        return fread($this->resource, $len);
     }
     
     function open($fileName) {
@@ -120,11 +127,11 @@ class phpMorphy_Storage_Mem extends phpMorphy_Storage {
     function getType() { return PHPMORPHY_STORAGE_MEM; }
     
     function getFileSize() {
-        return strlen($this->resource);
+        return $GLOBALS['__phpmorphy_strlen']($this->resource);
     }
     
     function readUnsafe($offset, $len) {
-        return substr($this->resource, $offset, $len);
+        return $GLOBALS['__phpmorphy_substr']($this->resource, $offset, $len);
     }
     
     function open($fileName) {
@@ -196,7 +203,7 @@ class phpMorphy_Storage_Factory {
             return new phpMorphy_Storage_Proxy($type, $fileName, $this);
         }
         
-        $clazz = 'phpMorphy_Storage_' . ucfirst(strtolower($type));
+        $clazz = 'phpMorphy_Storage_' . ucfirst($GLOBALS['__phpmorphy_strtolower']($type));
         
         if($type != PHPMORPHY_STORAGE_SHM) {
             return new $clazz($fileName);

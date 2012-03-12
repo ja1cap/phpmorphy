@@ -1,3 +1,5 @@
+Changes with phpMorphy 0.3.7                                     15 Oct 2009
+    *) phpMorphy now work when mbstring overloads string functions, i.e. mbstring.func_overload  & 2 == 2
 Changes with phpMorphy 0.3.6                                     06 Sep 2009
     *) getGramInfo(), getGramInfoMergeForms(), getAncode() returns distinct descriptors
     *) Add new method castFormByAncode()

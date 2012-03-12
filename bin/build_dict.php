@@ -1,7 +1,11 @@
 #!/usr/bin/php
 <?php
+if(2 == (ini_get('mbstring.func_overload') & 2)) {
+    die("don`t overload string functions in mbstring extension, see mbstring.func_overload option");
+}
+
 if($argc < 4) {
-    echo "Usage " . $argv[0] . " XML_FILE OUT_DIR ENCODING [WITH_FORM_NO - 1/0]";
+    echo "Usage " . $argv[0] . " XML_FILE OUT_DIR ENCODING [WITH_FORM_NO - 1/0] [BUILD_DIALING_ANCODES_MAP - 1/0]";
     exit;
 }
 
@@ -136,11 +140,26 @@ function get_locale($xml) {
     return $result;
 }
 
+function locale_to_dialing($locale) {
+    static $map = array(
+        'ru_RU' => 'Russian',
+        'en_EN' => 'English',
+        'de_DE' => 'German',
+    );
+
+    if(isset($map[$locale])) {
+        return $map[$locale];
+    }
+
+    return false;
+}
+
 if(false === ($locale = get_locale($argv[1]))) {
     doError("Can`t retrieve locale name from '" . $argv[1] . "' file");
 }
 
-$morph_data_file = $argv[2] . '/morph_data.' . strtolower($locale) . '.bin';
+$out_dir = $argv[2];
+$morph_data_file = $out_dir . '/morph_data.' . strtolower($locale) . '.bin';
 
 echo "Found '$locale' locale in $argv[1]\n";
 
@@ -159,6 +178,14 @@ if(@$argv[4]) {
 
 doExec('Build dictionary', MORPHY_BUILDER, $args);
 
-doExec('Extract gramtab', BIN_DIR . '/extract_gramtab.php', array($morph_data_file, $argv[2]));
-doExec('Extract graminfo header', BIN_DIR . '/extract_graminfo_header.php', array($morph_data_file, $argv[2]));
-doExec('Create ancodes cache', BIN_DIR . '/extract_ancodes.php', array($morph_data_file, $argv[2]));
+doExec('Extract gramtab', BIN_DIR . '/extract_gramtab.php', array($morph_data_file, $out_dir));
+doExec('Extract graminfo header', BIN_DIR . '/extract_graminfo_header.php', array($morph_data_file, $out_dir));
+doExec('Create ancodes cache', BIN_DIR . '/extract_ancodes.php', array($morph_data_file, $out_dir));
+
+if(@$argv[5]) {
+    if(false !== ($language = locale_to_dialing($locale))) {
+        doExec('Create dialing ancodes map', BIN_DIR . '/extract_ancodes_map.php', array($morph_data_file, $language, $out_dir));
+    } else {
+        echo "Locale '$locale' unsupported for dialing dictionaries. Skip ancodes map." . PHP_EOL;
+    }
+}

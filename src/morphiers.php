@@ -102,7 +102,7 @@ abstract class phpMorphy_AnnotDecoder_Base implements phpMorphy_AnnotDecoder_Int
         
         if($count > 1) {
             for($i = 0; $i < $count - 1; $i++) {
-                $res = unpack($unpack_str, substr($annotRaw, 4 + ($i + 1) * $unpack_size, $unpack_size));
+                $res = unpack($unpack_str, $GLOBALS['__phpmorphy_substr']($annotRaw, 4 + ($i + 1) * $unpack_size, $unpack_size));
                 
                 if($res['common_ancode'] == self::INVALID_ANCODE_ID) {
                     $res['common_ancode'] = null;
@@ -113,7 +113,7 @@ abstract class phpMorphy_AnnotDecoder_Base implements phpMorphy_AnnotDecoder_Int
         }
         
         if($withBase) {
-            $items = explode($this->ends, substr($annotRaw, 4 + $count * $unpack_size));
+            $items = explode($this->ends, $GLOBALS['__phpmorphy_substr']($annotRaw, 4 + $count * $unpack_size));
             for($i = 0; $i < $count; $i++) {
                 $result[$i]['base_prefix'] = $items[$i * 2];
                 $result[$i]['base_suffix'] = $items[$i * 2 + 1];
@@ -183,7 +183,7 @@ class phpMorphy_AnnotDecoder_Factory {
     }
     
     protected function instantinate($type) {
-        $clazz = 'phpMorphy_AnnotDecoder_' . ucfirst(strtolower($type));
+        $clazz = 'phpMorphy_AnnotDecoder_' . ucfirst($GLOBALS['__phpmorphy_strtolower']($type));
         
         return new $clazz($this->eos);
     }
@@ -415,16 +415,16 @@ class phpMorphy_Morphier_Helper {
     
     protected function getBaseAndPrefix($word, $cplen, $plen, $flen) {
         if($flen) {
-            $base = substr($word, $cplen + $plen, -$flen);
+            $base = $GLOBALS['__phpmorphy_substr']($word, $cplen + $plen, -$flen);
         } else {
             if($cplen || $plen) {
-                $base = substr($word, $cplen + $plen);
+                $base = $GLOBALS['__phpmorphy_substr']($word, $cplen + $plen);
             } else {
                 $base = $word;
             }
         }
         
-        $prefix = $cplen ? substr($word, 0, $cplen) : '';
+        $prefix = $cplen ? $GLOBALS['__phpmorphy_substr']($word, 0, $cplen) : '';
         
         return array($base, $prefix);
     }
@@ -1242,7 +1242,7 @@ class phpMorphy_Morphier_Finder_Predict_Suffix extends phpMorphy_Morphier_Finder
         }
         
         for($i = 1, $c = $word_len - $this->min_suf_len; $i < $c; $i++) {
-            $word = substr($word, $this->unicode->firstCharSize($word));
+            $word = $GLOBALS['__phpmorphy_substr']($word, $this->unicode->firstCharSize($word));
             
             if(false !== ($result = parent::doFindWord($word))) {
                 break;
@@ -1362,7 +1362,7 @@ class phpMorphy_Morphier_Finder_Predict_Databse extends phpMorphy_Morphier_Finde
         if($result['result'] && null !== $result['annot']) {
             $annots = $result['annot'];
         } else {
-            $match_len = $this->unicode->strlen($this->unicode->fixTrailing(substr($rev_word, 0, $result['walked'])));
+            $match_len = $this->unicode->strlen($this->unicode->fixTrailing($GLOBALS['__phpmorphy_substr']($rev_word, 0, $result['walked'])));
             
             if(null === ($annots = $this->determineAnnots($result['last_trans'], $match_len))) {
                 return false;
@@ -1407,11 +1407,11 @@ class phpMorphy_Morphier_Finder_Predict_Databse extends phpMorphy_Morphier_Finde
             $prefix = $flexias[$annot['form_no'] * 2];
             $suffix = $flexias[$annot['form_no'] * 2 + 1];
             
-            $plen = strlen($prefix);
-            $slen = strlen($suffix);
+            $plen = $GLOBALS['__phpmorphy_strlen']($prefix);
+            $slen = $GLOBALS['__phpmorphy_strlen']($suffix);
             if(
-                (!$plen || substr($word, 0, strlen($prefix)) === $prefix) &&
-                (!$slen || substr($word, -strlen($suffix)) === $suffix)
+                (!$plen || $GLOBALS['__phpmorphy_substr']($word, 0, $GLOBALS['__phpmorphy_strlen']($prefix)) === $prefix) &&
+                (!$slen || $GLOBALS['__phpmorphy_substr']($word, -$GLOBALS['__phpmorphy_strlen']($suffix)) === $suffix)
             ) {
                 $result[] = $annot;
             }
@@ -1700,7 +1700,7 @@ class phpMorphy_Morphier_Bulk implements phpMorphy_Morphier_Interface {
         $result = array();
         
         foreach($this->findWord($words) as $annot_raw => $words) {
-            if(strlen($annot_raw) == 0) continue;
+            if($GLOBALS['__phpmorphy_strlen']($annot_raw) == 0) continue;
             
             if($callWithWord) {
                 foreach($words as $word) {
@@ -1767,7 +1767,7 @@ class phpMorphy_Morphier_Bulk implements phpMorphy_Morphier_Interface {
                 
                 $result = $fsa->walk($trans, $label, $is_final);
                 
-                if(strlen($label) == $result['walked']) {
+                if($GLOBALS['__phpmorphy_strlen']($label) == $result['walked']) {
                     $trans = $result['word_trans'];
                 } else {
                     $trans = false;
@@ -1801,7 +1801,7 @@ class phpMorphy_Morphier_Bulk implements phpMorphy_Morphier_Interface {
 
         // process found annotations
         foreach($annotsRaw as $annot_raw => $words) {
-            if(strlen($annot_raw) == 0) continue;
+            if($GLOBALS['__phpmorphy_strlen']($annot_raw) == 0) continue;
             
             foreach($this->helper->decodeAnnot($annot_raw, $onlyBase) as $annot) {
                 if(!($onlyBase || $pseudoRoot)) {
@@ -1818,16 +1818,16 @@ class phpMorphy_Morphier_Bulk implements phpMorphy_Morphier_Interface {
                 
                 foreach($words as $word) {
                     if($flen) {
-                        $base = substr($word, $cplen + $plen, -$flen);
+                        $base = $GLOBALS['__phpmorphy_substr']($word, $cplen + $plen, -$flen);
                     } else {
                         if($cplen || $plen) {
-                            $base = substr($word, $cplen + $plen);
+                            $base = $GLOBALS['__phpmorphy_substr']($word, $cplen + $plen);
                         } else {
                             $base = $word;
                         }
                     }
                     
-                    $prefix = $cplen ? substr($word, 0, $cplen) : '';
+                    $prefix = $cplen ? $GLOBALS['__phpmorphy_substr']($word, 0, $cplen) : '';
                     
                     if($pseudoRoot) {
                         $result[$word][$base] = 1;
@@ -1883,7 +1883,7 @@ class phpMorphy_Morphier_Bulk implements phpMorphy_Morphier_Interface {
                 continue;
             }
             
-            $word_len = strlen($word);
+            $word_len = $GLOBALS['__phpmorphy_strlen']($word);
             // find longest common prefix
             for($lcp = 0, $c = min($prev_word_len, $word_len); $lcp < $c && $word[$lcp] == $prev_word[$lcp]; $lcp++);
             
@@ -1916,10 +1916,10 @@ class phpMorphy_Morphier_Bulk implements phpMorphy_Morphier_Interface {
                     
                     $stack[] = $node;
                 } else {
-                    $trim_size = strlen($prev_word) - $lcp;
+                    $trim_size = $GLOBALS['__phpmorphy_strlen']($prev_word) - $lcp;
                     
                     for($stack_size = count($stack) - 1; ;--$stack_size) {
-                        $trim_size -= strlen($state_labels[$node]);
+                        $trim_size -= $GLOBALS['__phpmorphy_strlen']($state_labels[$node]);
                         
                         if($trim_size <= 0) {
                             break;
@@ -1950,17 +1950,17 @@ class phpMorphy_Morphier_Bulk implements phpMorphy_Morphier_Interface {
                     $new_node_id_2 = $new_node_id_1 + 1;
                     
                     // new_node_1
-                    $state_labels[] = substr($node_key, $trim_size);
+                    $state_labels[] = $GLOBALS['__phpmorphy_substr']($node_key, $trim_size);
                     $state_finals .= $state_finals[$node];
                     $state_dests[] = $state_dests[$node];
                     
                     // adjust old node
-                    $state_labels[$node] = substr($node_key, 0, $trim_size);
+                    $state_labels[$node] = $GLOBALS['__phpmorphy_substr']($node_key, 0, $trim_size);
                     $state_finals[$node] = '0';
                     $state_dests[$node] = array($new_node_id_1);
                     
                     // append new node, new_node_2
-                    $state_labels[] = substr($word, $lcp);
+                    $state_labels[] = $GLOBALS['__phpmorphy_substr']($word, $lcp);
                     $state_finals .= '1';
                     $state_dests[] = false;
     
@@ -1970,7 +1970,7 @@ class phpMorphy_Morphier_Bulk implements phpMorphy_Morphier_Interface {
                 } else {
                     $new_node_id = count($state_labels);
                     
-                    $state_labels[] = substr($word, $lcp);
+                    $state_labels[] = $GLOBALS['__phpmorphy_substr']($word, $lcp);
                     $state_finals .= '1';
                     $state_dests[] = false;
                     

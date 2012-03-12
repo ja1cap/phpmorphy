@@ -34,6 +34,25 @@ require_once(PHPMORPHY_DIR . '/langs_stuff/common.php');
 
 class phpMorphy_Exception extends Exception { }
 
+// we need byte oriented string functions
+// with namespaces support we only need overload string functions in current namespace
+// but currently use this ugly hack.
+function phpmorphy_overload_mb_funcs($prefix) {
+    $GLOBALS['__phpmorphy_strlen'] = "{$prefix}strlen";
+    $GLOBALS['__phpmorphy_strpos'] = "{$prefix}strpos";
+    $GLOBALS['__phpmorphy_strrpos'] = "{$prefix}strrpos";
+    $GLOBALS['__phpmorphy_substr'] = "{$prefix}substr";
+    $GLOBALS['__phpmorphy_strtolower'] = "{$prefix}strtolower";
+    $GLOBALS['__phpmorphy_strtoupper'] = "{$prefix}strtoupper";
+    $GLOBALS['__phpmorphy_substr_count'] = "{$prefix}substr_count";
+}
+
+if(2 == (ini_get('mbstring.func_overload') & 2)) {
+    phpmorphy_overload_mb_funcs('mb_orig_');
+} else {
+    phpmorphy_overload_mb_funcs('');
+}
+
 class phpMorphy_FilesBundle {
     protected
         $dir,
@@ -49,7 +68,7 @@ class phpMorphy_FilesBundle {
     }
 
     function setLang($lang) {
-        $this->lang = strtolower($lang);
+        $this->lang = $GLOBALS['__phpmorphy_strtolower']($lang);
     }
 
     function getCommonAutomatFile() {
@@ -331,6 +350,7 @@ class phpMorphy {
     
     /**
     * @param mixed $word - string or array of strings
+    * @paradm bool $asText - represent graminfo as text or ancodes
     * @param mixed $type - prediction managment
     * @return array
     */

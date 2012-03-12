@@ -157,7 +157,7 @@ abstract class phpMorphy_Fsa implements phpMorphy_Fsa_Interface {
     }
     
     static protected function readHeader($headerRaw) {
-        if(strlen($headerRaw) != self::HEADER_SIZE) {
+        if($GLOBALS['__phpmorphy_strlen']($headerRaw) != self::HEADER_SIZE) {
             throw new phpMorphy_Exception('Invalid header string given');
         }
         

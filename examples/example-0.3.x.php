@@ -27,7 +27,7 @@ $lang = 'ru_RU';
 try {
     $morphy = new phpMorphy($dir, $lang, $opts);
 } catch(phpMorphy_Exception $e) {
-    die('Error occured while creating phpMorphy instance: ' . $e->getMessage());
+    die('Error occured while creating phpMorphy instance: ' . PHP_EOL . $e);
 }
 
 // All words in dictionary in UPPER CASE, so don`t forget set proper locale via setlocale(...) call
@@ -54,9 +54,9 @@ try {
         // $base = $morphy->getBaseForm($word, phpMorphy::IGNORE_PREDICT); // don`t use prediction
         // $base = $morphy->getBaseForm($word, phpMorphy::ONLY_PREDICT); // always predict word
 
-        $is_predicted = $morphy->isLastPredicted(); // or $morphy->getLastPredicitionType() == phpMorphy::PREDICT_BY_NONE
-        $is_predicted_by_db = $morphy->getLastPredicitionType() == phpMorphy::PREDICT_BY_DB;
-        $is_predicted_by_suffix = $morphy->getLastPredicitionType() == phpMorphy::PREDICT_BY_SUFFIX;
+        $is_predicted = $morphy->isLastPredicted(); // or $morphy->getLastPredictionType() == phpMorphy::PREDICT_BY_NONE
+        $is_predicted_by_db = $morphy->getLastPredictionType() == phpMorphy::PREDICT_BY_DB;
+        $is_predicted_by_suffix = $morphy->getLastPredictionType() == phpMorphy::PREDICT_BY_SUFFIX;
 
         // this used for deep analysis
         $collection = $morphy->findWord($word);

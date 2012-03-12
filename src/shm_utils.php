@@ -69,7 +69,7 @@ abstract class phpMorphy_Semaphore {
     
     static function create($key, $empty = false) {
         if(!$empty) {
-            if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+            if (0 == strcasecmp($GLOBALS['__phpmorphy_substr'](PHP_OS, 0, 3), 'WIN')) {
                 $clazz = 'phpMorphy_Semaphore_Win';
             } else {
                 $clazz = 'phpMorphy_Semaphore_Nix';
@@ -623,11 +623,11 @@ class phpMorphy_Shm_Cache implements phpMorphy_Shm_Cache_Interface {
     
     protected function readHeader() {
         if(false === ($data = shmop_read($this->segment, 0, $this->getFilesOffset()))) {
-            throw new phpMorphy_Exception("Can`t read header for $this->segment");
+            throw new phpMorphy_Exception("Can`t read header for " . $this->segment);
         }
         
         if(false === ($result = unserialize($data))) {
-            throw new phpMorphy_Exception("Can`t unserialize header for $this->segment");
+            throw new phpMorphy_Exception("Can`t unserialize header for " . $this->segment);
         }
         
         return $result;
@@ -636,7 +636,7 @@ class phpMorphy_Shm_Cache implements phpMorphy_Shm_Cache_Interface {
     protected function writeHeader($shmId, phpMorphy_Shm_Header $header) {
         $data = serialize($header);
         
-        if(strlen($data) > $this->getFilesOffset()) {
+        if($GLOBALS['__phpmorphy_strlen']($data) > $this->getFilesOffset()) {
             throw new phpMorphy_Exception("Too long header, try increase PHPMORPHY_SHM_HEADER_MAX_SIZE");
         }
         
@@ -663,3 +663,4 @@ class phpMorphy_Shm_Cache implements phpMorphy_Shm_Cache_Interface {
         return $handle;
     }
 }
+
