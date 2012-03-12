@@ -472,7 +472,8 @@ class phpMorphy_WordDescriptor_Collection implements Countable, IteratorAggregat
             }
         }
         
-        return count($result) ? $result : false;
+//        return count($result) ? $result : false;
+        return $result;
     }
 	
 	function offsetExists($off) {
@@ -671,7 +672,8 @@ class phpMorphy_WordDescriptor implements Countable, ArrayAccess, IteratorAggreg
             }
         }
         
-        return count($result) ? $result : false;
+        return $result;
+//        return count($result) ? $result : false;
     }
     
     function hasPartOfSpeech($poses) {
@@ -696,7 +698,8 @@ class phpMorphy_WordDescriptor implements Countable, ArrayAccess, IteratorAggreg
             }
         }
         
-        return count($result) ? $result : false;
+        return $result;
+//        return count($result) ? $result : false;
     }
 	
 	function count() {

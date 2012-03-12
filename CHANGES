@@ -1,3 +1,5 @@
+Changes with phpMorphy 0.3.2                                     08 Apr 2009
+    *) getWordFormsByXXX always return array
 Changes with phpMorphy 0.3.0                                     02 Apr 2009
     *) new dictionaries format
     *) mutliencoding support(need dictionary compilation)
