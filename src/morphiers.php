@@ -2,7 +2,7 @@
  /**
  * This file is part of phpMorphy library
  *
- * Copyright c 2007 Kamaev Vladimir <heromantor@users.sourceforge.net>
+ * Copyright c 2007-2008 Kamaev Vladimir <heromantor@users.sourceforge.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -27,13 +27,13 @@ interface phpMorphy_Morphier_Interface {
 	function getPseudoRoot($word);
 };
 
-class phpMorphy_EmptyMorphier implements phpMorphy_Morphier_Interface {
+class phpMorphy_Morphier_Empty implements phpMorphy_Morphier_Interface {
 	function getBaseForm($word) { return false; }
 	function getAllForms($word) { return false; }
 	function getAllFormsWithGramInfo($word) { return false; }
 	function getPseudoRoot($word) { return false; }
 }
-
+ 
 /**
  * Base class for all morphiers
  * @abstract 
@@ -94,18 +94,25 @@ abstract class phpMorphy_Morphier_Base implements phpMorphy_Morphier_Interface {
 		}
 		
 		$result = $this->composeGramInfos($annots, 'all');
+		
 		$i = 0;
 		foreach($annots as $annot) {
 			$current =& $result[$i];
 			
-			$current['common'] = $annot['ancode'];
-			$current['forms'] =  $this->composeForms($word, array($annot), false);
+			$forms = $this->composeForms($word, array($annot), false);
+
+			if(false !== $forms) {
+				$current['common'] = $annot['ancode'];
+				$current['forms'] = $forms;
+			} else {
+				unset($result[$i]);
+			}
 			
 			unset($current);
 			$i++;
 		}
 		
-		return $result;
+		return count($result) ? $result : false;
 	}
 	
 	function getFsa() { return $this->fsa; }
@@ -321,11 +328,15 @@ class phpMorphy_Morphier_DictBulk extends phpMorphy_Morphier_Common {
 		return $result;
 	}
 	
-	protected function findWord($words) {
+	/*
+	protected function findWord_slow($words) {
 		$tree = $this->buildPrefixTree($words);
 		
 		$annots = array();
 		$unknown_words_annot = '';
+		
+		$walk_calls = 0;
+		$N = 0;
 		
 		for($keys = array_keys($tree), $i = 0, $c = count($keys); $i < $c; $i++) {
 			$prefix = $keys[$i];
@@ -351,6 +362,62 @@ class phpMorphy_Morphier_DictBulk extends phpMorphy_Morphier_Common {
 					}
 				} else {
 					$annots[$unknown_words_annot][] = $word;
+				}
+			}
+		}
+		
+		return $annots;
+	}
+	*/
+	
+	protected function findWord($words) {
+		$unknown_words_annot = '';
+		
+		list($labels, $finals, $dests) = $this->buildPatriciaTrie($words);
+		
+		$annots = array();
+		$unknown_words_annot = '';
+		$stack = array(0, '', $this->root_trans);
+		$stack_idx = 0;
+		
+		$fsa = $this->fsa;
+		
+		// TODO: Improve this
+		while($stack_idx >= 0) {
+			$n = $stack[$stack_idx];
+			$path = $stack[$stack_idx + 1] . $labels[$n];
+			$trans = $stack[$stack_idx + 2];
+			$stack_idx -= 3; // TODO: Remove items from stack? (performance!!!)
+			
+			$is_final = $finals[$n] > 0;
+			
+			$result = false;
+			if(false !== $trans && $n > 0) {
+				$label = $labels[$n];
+				
+				$result = $fsa->walk($trans, $label, $is_final);
+				
+				if(strlen($label) == $result['walked']) {
+					$trans = $result['word_trans'];
+				} else {
+					$trans = false;
+				}
+			}
+			
+			if($is_final) {
+				if(false !== $trans && isset($result['annot'])) {
+					$annots[$result['annot']][] = $path;
+				} else {
+					$annots[$unknown_words_annot][] = $path;
+				}
+			}
+			
+			if(false !== $dests[$n]) {
+				foreach($dests[$n] as $dest) {
+					$stack_idx += 3;
+					$stack[$stack_idx] = $dest;
+					$stack[$stack_idx + 1] = $path;
+					$stack[$stack_idx + 2] = $trans;
 				}
 			}
 		}
@@ -404,6 +471,138 @@ class phpMorphy_Morphier_DictBulk extends phpMorphy_Morphier_Common {
 		return $result;
 	}
 	
+	protected function buildPatriciaTrie($words) {
+		sort($words);
+		
+		$stack = array();
+		$prev_word = '';
+		$prev_word_len = 0;
+		$prev_lcp = 0;
+		
+		$state_labels = array();
+		$state_finals = array();
+		$state_dests = array();
+		
+		$state_labels[] = '';
+		$state_finals = '0';
+		$state_dests[] = array();
+		
+		$node = 0;
+		
+		foreach($words as $word) {
+			if($word == $prev_word) {
+				continue;
+			}
+			
+			$word_len = strlen($word);
+			// find longest common prefix
+			for($lcp = 0, $c = min($prev_word_len, $word_len); $lcp < $c && $word[$lcp] == $prev_word[$lcp]; $lcp++);
+			
+			if($lcp == 0) {
+				$stack = array();
+				
+				$new_state_id = count($state_labels);
+				
+				$state_labels[] = $word;
+				$state_finals .= '1';
+				$state_dests[] = false;
+				
+				$state_dests[0][] = $new_state_id;
+				
+				$node = $new_state_id;
+			} else {
+				$need_split = true;
+				$trim_size = 0; // for split
+				
+				if($lcp == $prev_lcp) {
+					$need_split = false;
+					$node = $stack[count($stack) - 1];
+				} elseif($lcp > $prev_lcp) {
+					if($lcp == $prev_word_len) {
+						$need_split = false;
+					} else {
+						$need_split = true;
+						$trim_size = $lcp - $prev_lcp;
+					}
+					
+					$stack[] = $node;
+				} else {
+					$trim_size = strlen($prev_word) - $lcp;
+					
+					for($stack_size = count($stack) - 1; ;--$stack_size) {
+						$trim_size -= strlen($state_labels[$node]);
+						
+						if($trim_size <= 0) {
+							break;
+						}
+						
+						if(count($stack) < 1) {
+							throw new phpMorphy_Exception('Infinite loop posible');
+						}
+						
+						$node = array_pop($stack);
+					}
+					
+					$need_split = $trim_size < 0;
+					$trim_size = abs($trim_size);
+					
+					if($need_split) {
+						$stack[] = $node;
+					} else {
+						$node = $stack[$stack_size];
+					}
+				}
+				
+				if($need_split) {
+					$node_key = $state_labels[$node];
+					
+					// split
+					$new_node_id_1 = count($state_labels);
+					$new_node_id_2 = $new_node_id_1 + 1;
+					
+					// new_node_1
+					$state_labels[] = substr($node_key, $trim_size);
+					$state_finals .= $state_finals[$node];
+					$state_dests[] = $state_dests[$node];
+					
+					// adjust old node
+					$state_labels[$node] = substr($node_key, 0, $trim_size);
+					$state_finals[$node] = '0';
+					$state_dests[$node] = array($new_node_id_1);
+					
+					// append new node, new_node_2
+					$state_labels[] = substr($word, $lcp);
+					$state_finals .= '1';
+					$state_dests[] = false;
+	
+					$state_dests[$node][] = $new_node_id_2;
+					
+					$node = $new_node_id_2;
+				} else {
+					$new_node_id = count($state_labels);
+					
+					$state_labels[] = substr($word, $lcp);
+					$state_finals .= '1';
+					$state_dests[] = false;
+					
+					if(false !== $state_dests[$node]) {
+						$state_dests[$node][] = $new_node_id;
+					} else {
+						$state_dests[$node] = array($new_node_id);
+					}
+					
+					$node = $new_node_id;
+				}
+			}
+			
+			$prev_word = $word;
+			$prev_word_len = $word_len;
+			$prev_lcp = $lcp;
+		}
+		
+		return array($state_labels, $state_finals, $state_dests);
+	}
+	/*
 	protected function buildPrefixTree($words) {
 		sort($words);
 		
@@ -425,6 +624,7 @@ class phpMorphy_Morphier_DictBulk extends phpMorphy_Morphier_Common {
 		
 		return $prefixes;
 	}
+	*/
 }
 
 class phpMorphy_Morphier_DictSingle extends phpMorphy_Morphier_Common {
@@ -493,7 +693,7 @@ class phpMorphy_PredictMorphier_Collector extends phpMorphy_Fsa_WordsCollector {
 		if($this->collected > $this->limit) {
 			return false;
 		}
-
+		
 		$used_poses =& $this->used_poses;
 		$annots = $this->decodeAnnot($annotRaw);
 		
@@ -570,10 +770,49 @@ class phpMorphy_Morphier_PredictByDatabse extends phpMorphy_Morphier_Base {
 		if(!is_array($annots)) {
 			$annots = $this->collector->decodeAnnot($annots);
 		}
-		
+
+
 		return $this->fixAnnots($annots);
 	}
 	
+	/*
+	TODO: сделать, когда будет готов новый компилер словаря (с form_no)
+	protected function composeForms($word, $annots, $onlyBase) {
+		$result = array();
+		$word_len = strlen($word);
+		
+		foreach($annots as $annot) {
+			$flen = $annot['flen'];
+			$plen = $annot['plen'];
+			$cplen = $annot['cplen'];
+
+			if($flen + $plen + $cplen <= $word_len) {
+				list($base, $prefix) = $this->getBaseAndPrefix($word, $cplen, $plen, $flen);
+
+				// TODO: это неверно и криво (нужен form_no)
+				$word_suffix = $flen ? substr($word, -$flen) : '';
+			    $word_prefix = substr($word, 0, $cplen + $plen);
+
+				// read flexia
+				$flexias = $this->graminfo->readFlexiaData($annot, $onlyBase);
+			
+			    //vd($word, $word_prefix, $word_suffix, $annot, $onlyBase, $flexias);
+
+				for($i = 0, $c = count($flexias); $i < $c; $i += 2) {
+					$flexia_prefix = $flexias[$i];
+					$flexia_suffix = $flexias[$i + 1];
+
+					if($flexia_suffix == $word_suffix && $flexia_prefix == $word_prefix) {
+						$result[$prefix . $flexia_prefix . $base . $flexia_suffix] = 1;
+					}
+				}
+			}
+		}
+
+		return count($result) ? array_keys($result) : false;
+	}
+	*/
+
 	// TODO: Refactor this!!!
 	protected function getAnnotSize() { return 16; }
 	protected function decodeAnnot($annots) { return $this->collector->decodeAnnot($annots); }
@@ -596,10 +835,11 @@ class phpMorphy_Morphier_PredictByDatabse extends phpMorphy_Morphier_Base {
 	}
 	
 	protected function fixAnnots($annots) {
+		// remove all prefixes?
 		for($i = 0, $c = count($annots); $i < $c; $i++) {
 			$annots[$i]['cplen'] = $annots[$i]['plen'] = 0;
 		}
-		
+
 		return $annots;
 	}
 	

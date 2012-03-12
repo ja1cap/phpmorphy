@@ -1,3 +1,7 @@
+Changes with phpMorphy 0.2.4                                     26 May 2008
+    *) Improve perfomance in bulk mode; thanks to Wicked
+    *) Fixed bug in shm storage type, with php5.2.6; thanks to berkut
+
 Changes with phpMorphy 0.2.3.2                                   08 Apr 2008
     *) Fixed bug with disabled prediction(both) and bulk mode used
 

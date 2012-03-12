@@ -104,9 +104,9 @@ class phpMorphy_Storage_Shm extends phpMorphy_Storage {
 		
 		$result = $this->manager->get();
 		
-		$this->file_size = $result['file_size'];
+		$this->file_size = $result->getFileSize();
 		
-		return $result['shm_id'];
+		return $result->getShmId();
 	}
 	
 	protected function createManager($file) {

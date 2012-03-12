@@ -2,7 +2,7 @@
  /**
  * This file is part of phpMorphy library
  *
- * Copyright c 2007 Kamaev Vladimir <heromantor@users.sourceforge.net>
+ * Copyright c 2007-2008 Kamaev Vladimir <heromantor@users.sourceforge.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -26,20 +26,52 @@ interface phpMorphy_GramTab_Builder_Interace {
 	 *
 	 * @param string $pos Part of speech string
 	 * @param string $grammems Grammems string
-	 * @return string
+	 * @return mixed
 	 */
 	function build($pos, $grammems);
+	
+	/**
+	 * @param string $grammems
+	 * @return mixed
+	 */
+	function processGrammems($grammems);
 	
 	/**
 	 * Join several graminfo strings into one
 	 *
 	 * @param array $strings
-	 * @return string
+	 * @return mixed
 	 */
 	function join($strings);
 }
- 
-class phpMorphy_GramTab_StandartBuilder implements phpMorphy_GramTab_Builder_Interace {
+
+interface phpMorphy_GramTab_Interface {
+	/**
+	 * @param string $ancodes
+	 * @return mixed
+	 */
+	function resolve($ancodes);
+	
+	/**
+	 * @param string $ancode
+	 * @return void
+	 */
+	function resolveOne($ancode, &$pos, &$grammems);
+	
+	/**
+	 * @param string $ancodes
+	 * @return int
+	 */
+	function getFormsCount($ancodes);
+	
+	/**
+	 * @param string $ancodes
+	 * @return array
+	 */
+	function splitAncodes($ancodes);
+}
+
+class phpMorphy_GramTab_StringBuilder implements phpMorphy_GramTab_Builder_Interace {
 	function build($pos, $grammems) {
 		if($pos) {
 			return "$pos $grammems";
@@ -48,12 +80,33 @@ class phpMorphy_GramTab_StandartBuilder implements phpMorphy_GramTab_Builder_Int
 		}
 	}
 	
+	function processGrammems($grammems) {
+		return $grammems;
+	}
+	
 	function join($strings) {
 		return implode(';', $strings);
 	}
 };
 
-class phpMorphy_GramTab {
+class phpMorphy_GramTab_ArrayBuilder implements phpMorphy_GramTab_Builder_Interace {
+	function build($pos, $grammems) {
+		return array(
+			'grammems' => explode(',', $grammems),
+			'pos' => $pos
+		);
+	}
+	
+	function processGrammems($grammems) {
+		return explode(',', $grammems);
+	}
+	
+	function join($strings) {
+		return $strings;
+	}
+};
+
+class phpMorphy_GramTab implements phpMorphy_GramTab_Interface {
 	protected
 		$index,
 		$poses,
@@ -79,22 +132,44 @@ class phpMorphy_GramTab {
 		$this->poses = $data['poses'];
 	}
 	
+	function getFormsCount($ancodes) {
+		return strlen($ancodes) / 2;
+	}
+	
+	function splitAncodes($ancodes) {
+		return str_split($ancodes, 2);
+	}
+	
 	function resolve($ancodes) {
+		$result = array();
+		
 		if($ancodes) {
-			$result = array();
 			foreach(str_split($ancodes, 2) as $ancode) {
+				// make "$result[] = $this->resolveOne($ancode);" inline
 				$index = $this->index[$ancode];
 				
 				$result[] = $this->builder->build(
 					$this->poses[$index & 0xFF],
 					$this->grammems[$index >> 8]
 				);
+				
 			}
-			
-			return $this->builder->join($result);
-		} else {
-			return '';
 		}
+		
+		return $this->builder->join($result);
+	}
+	
+	function resolveOne($ancode, &$pos, &$grammems) {
+		$index = $this->index[$ancode];
+		
+		$pos = $this->poses[$index & 0xFF];
+		$grammems = $this->builder->processGrammems($this->grammems[$index >> 8]);
+		/*
+		return $this->builder->build(
+			$this->poses[$index & 0xFF],
+			$this->grammems[$index >> 8]
+		);
+		*/
 	}
 	
 	protected function prepare($data) {

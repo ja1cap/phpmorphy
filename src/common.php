@@ -2,7 +2,7 @@
  /**
  * This file is part of phpMorphy library
  *
- * Copyright c 2007 Kamaev Vladimir <heromantor@users.sourceforge.net>
+ * Copyright c 2007-2008 Kamaev Vladimir <heromantor@users.sourceforge.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -173,11 +173,15 @@ class phpMorphy {
 				$options['storage'],
 				$filesBundle->getGramTabFile()
 			);
-			
-			$this->single_morphier = $this->createGramTabMorphier(
-				$single_morphier,
-				$this->gramtab
-			);			
+
+			if(0) {
+				$this->single_morphier = $this->createGramTabMorphier(
+					$single_morphier,
+					$this->gramtab
+				);
+			} else {
+				$this->single_morphier = $single_morphier;
+			}
 		} else {
 			$this->single_morphier = $single_morphier;
 		}
@@ -248,6 +252,10 @@ class phpMorphy {
 		return $this->graminfo->getCodepage();
 	}
 	
+	function getGramTab() {
+		return $this->gramtab;
+	}
+	
 	protected function repairOptions($options) {
 		$default = array(
 		 	'storage' => PHPMORPHY_STORAGE_FILE,
@@ -288,8 +296,13 @@ class phpMorphy {
 		
 		return new phpMorphy_GramTab(
 			$this->readGramTab($storageType, $fileName),
-			new phpMorphy_GramTab_StandartBuilder()
+			$this->createGramTabBuilder()
 		);
+	}
+	
+	protected function createGramTabBuilder() {
+		//return new phpMorphy_GramTab_ArrayBuilder();
+		return new phpMorphy_GramTab_StringBuilder();
 	}
 	
 	protected function createGramInfo($storage) {
@@ -316,7 +329,7 @@ class phpMorphy {
 	
 	protected function createBulkMorphier($fsa, $graminfo, $predict) {
 		if(null === $predict) {
-			$predict = new phpMorphy_EmptyMorphier();
+			$predict = new phpMorphy_Morphier_Empty();
 		}
 
 		return new phpMorphy_Morphier_DictBulk($fsa, $graminfo, $predict);

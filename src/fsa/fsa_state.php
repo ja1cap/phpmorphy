@@ -2,7 +2,7 @@
  /**
  * This file is part of phpMorphy library
  *
- * Copyright c 2007 Kamaev Vladimir <heromantor@users.sourceforge.net>
+ * Copyright c 2007-2008 Kamaev Vladimir <heromantor@users.sourceforge.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
