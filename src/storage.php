@@ -1,0 +1,116 @@
+<?php
+define('PHPMORPHY_STORAGE_FILE',	'file');
+define('PHPMORPHY_STORAGE_MEM',		'mem');
+define('PHPMORPHY_STORAGE_SHM',		'shm');
+
+class phpMorphy_Storage {
+	var $file_name;
+	var $resource;
+	
+	// private ctor
+	function phpMorphy_Storage($fileName) {
+		$this->file_name = $fileName;
+		$this->resource =& $this->_open($fileName);
+	}
+	
+	// static
+	function &create($type, $fileName) {
+		// TODO: This ugly refactor latter
+		switch($type) {
+			case PHPMORPHY_STORAGE_FILE: 
+			case PHPMORPHY_STORAGE_MEM:
+			case PHPMORPHY_STORAGE_SHM: break;
+			default: return php_morphy_error("Invalid storage type $type specified");
+		}
+		
+		$clazz = 'phpMorphy_Storage_' . ucfirst(strtolower($type));
+		$obj =& new $clazz($fileName);
+		
+		return $obj;
+	}
+	
+	function getFileName() { return $this->file_name; }
+	function &getResource() { return $this->resource; }
+	
+	// abstract
+	function getFileSize() { }
+	function getType() { }
+	function read($offset, $len) { }
+	function _open($fileName) { }
+};
+
+class phpMorphy_Storage_File extends phpMorphy_Storage {
+	function getType() { return PHPMORPHY_STORAGE_FILE; }
+	
+	function getFileSize() {
+		if(false === ($stat = fstat($this->resource))) {
+			return php_morphy_error('Can`t invoke fstat for ' . $this->file_name . ' file');
+		}
+		
+		return $stat['size'];
+	}
+	
+	function read($offset, $len) {
+		fseek($this->resource, $offset);
+		return fread($this->resource, $len);
+	}
+	
+	function _open($fileName) {
+		if(false === ($fh = fopen($fileName, 'rb'))) {
+			return php_morphy_error("Can`t open $this->file_name file");
+		}
+		
+		return $fh;
+	}
+}
+
+class phpMorphy_Storage_Mem extends phpMorphy_Storage {
+	function getType() { return PHPMORPHY_STORAGE_MEM; }
+	
+	function getFileSize() {
+		return strlen($this->resource);
+	}
+	
+	function read($offset, $len) {
+		return substr($this->resource, $offset, $len);
+	}
+	
+	function _open($fileName) {
+		if(false === ($string = file_get_contents($fileName))) {
+			return php_morphy_error("Can`t read $fileName file");
+		}
+		
+		return $string;
+	}
+}
+
+class phpMorphy_Storage_Shm extends phpMorphy_Storage {
+	var $manager;
+	var $file_size;
+	
+	function getFileSize() {
+		return $this->file_size;
+	}
+	
+	function getType() { return PHPMORPHY_STORAGE_SHM; }
+	
+	function read($offset, $len) {
+		return shmop_read($this->resource, $offset, $len);
+	}
+	
+	function _open($fileName) {
+		$this->manager =& $this->_createManager($fileName);
+		
+		$result = $this->manager->get();
+		
+		$this->file_size = $result['file_size'];
+		
+		return $result['shm_id'];
+	}
+	
+	function &_createManager($file) {
+		require_once(PHPMORPHY_DIR . '/shm_utils.php');
+		$obj =& new ShmFileManager($file, 'f');
+		return $obj;
+	}
+}
