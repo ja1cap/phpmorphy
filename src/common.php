@@ -174,14 +174,10 @@ class phpMorphy {
 				$filesBundle->getGramTabFile()
 			);
 
-			if(0) {
-				$this->single_morphier = $this->createGramTabMorphier(
-					$single_morphier,
-					$this->gramtab
-				);
-			} else {
-				$this->single_morphier = $single_morphier;
-			}
+			$this->single_morphier = $this->createGramTabMorphier(
+				$single_morphier,
+				$this->gramtab
+			);
 		} else {
 			$this->single_morphier = $single_morphier;
 		}
