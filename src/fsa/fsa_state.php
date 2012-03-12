@@ -26,15 +26,15 @@ class phpMorphy_Link_Base {
 		$trans,
 		$raw_trans;
 	
-	function phpMorphy_Link_Base(&$fsa, $trans, $rawTrans) {
-		$this->fsa =& $fsa;
+	function phpMorphy_Link_Base(phpMorphy_Fsa_Interface $fsa, $trans, $rawTrans) {
+		$this->fsa = $fsa;
 		$this->trans = $trans;
 		$this->raw_trans = $rawTrans;
 	}
 	
 	function isAnnotation() { }
 	function getTrans() { return $this->trans; }
-	function &getFsa() { return $this->fsa; }
+	function getFsa() { return $this->fsa; }
 	function getRawTrans() { return $this->raw_trans; }
 };
 
@@ -47,14 +47,12 @@ class phpMorphy_Link extends phpMorphy_Link_Base {
 	function getDest() { return $this->trans['dest']; }
 	function getAttr() { return $this->trans['attr']; }
 	
-	function &getTargetState() {
-		$obj =& $this->_createState($this->trans['dest']);
-		return $obj;
+	function getTargetState() {
+		return $this->createState($this->trans['dest']);
 	}
 	
-	function &_createState($index) {
-		$obj =& new phpMorphy_State($this->fsa, $index);
-		return $obj;
+	protected function createState($index) {
+		return new phpMorphy_State($this->fsa, $index);
 	}
 }
 
@@ -72,8 +70,8 @@ class phpMorphy_State {
 		$transes,
 		$raw_transes;
 	
-	function phpMorphy_State(&$fsa, $index) {
-		$this->fsa =& $fsa;
+	function phpMorphy_State(phpMorphy_Fsa_Interface $fsa, $index) {
+		$this->fsa = $fsa;
 		
 		$this->raw_transes = $fsa->readState($index);
 		$this->transes = $fsa->unpackTranses($this->raw_transes);
@@ -86,9 +84,9 @@ class phpMorphy_State {
 			$trans = $this->transes[$i];
 		
 			if(!$trans['term']) {
-				$result[] =& $this->_createNormalLink($trans, $this->raw_transes[$i]);
+				$result[] = $this->createNormalLink($trans, $this->raw_transes[$i]);
 			} else {
-				$result[] =& $this->_createAnnotLink($trans, $this->raw_transes[$i]);
+				$result[] = $this->createAnnotLink($trans, $this->raw_transes[$i]);
 			}
 		}
 		
@@ -97,13 +95,11 @@ class phpMorphy_State {
 	
 	function getSize() { return count($this->transes); }
 	
-	function &_createNormalLink($trans, $raw) {
-		$obj =& new phpMorphy_Link($this->fsa, $trans, $raw);
-		return $obj;
+	protected function createNormalLink($trans, $raw) {
+		return new phpMorphy_Link($this->fsa, $trans, $raw);
 	}
 	
-	function &_createAnnotLink($trans, $raw) {
-		$obj =& new phpMorphy_Link_Annot($this->fsa, $trans, $raw);
-		return $obj;
+	protected function createAnnotLink($trans, $raw) {
+		return new phpMorphy_Link_Annot($this->fsa, $trans, $raw);
 	}
 };
