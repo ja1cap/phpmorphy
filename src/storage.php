@@ -201,9 +201,7 @@ class phpMorphy_Storage_Factory {
         if($type != PHPMORPHY_STORAGE_SHM) {
             return new $clazz($fileName);
         } else {
-            $this->getShmCache();
-            
-            return new $clazz($fileName, $this->shm_cache);
+            return new $clazz($fileName, $this->getShmCache());
         }
     }
     

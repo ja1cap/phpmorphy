@@ -97,8 +97,6 @@ class phpMorphy_Dict_Writer_Xml extends phpMorphy_Dict_Writer_Base {
                     foreach($flexia_model as $flexia) {
                         $writer->startElement('flexia');
                         {   
-                            //var_dump($flexia);
-
                             $ancode_id = $flexia->getAncodeId();
                             
                             if(!$this->validator->validateAncodeId($ancode_id)) {

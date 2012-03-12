@@ -77,5 +77,9 @@
         <grammem name="ПРОФ" const_name="PMY_RG_PROFESSION" id="48" shift="48"/>
         <grammem name="ПРЕВ" const_name="PMY_RG_SUPERLATIVE" id="49" shift="49"/>
         <grammem name="ПОЛОЖ" const_name="PMY_RG_POSITIVE" id="50" shift="50"/>
+        <grammem name="КР" const_name="PMY_RG_SHORT" id="51" shift="51"/> 
+        <grammem name="ИНФ" const_name="PMY_RG_INFO" id="52" shift="52"/> 
+        <grammem name="ДПР" const_name="PMY_RG_DEEPR" id="53" shift="53"/> 
+        <grammem name="ПРЧ" const_name="PMY_RG_PR" id="54" shift="54"/>
     </grammems>
 </gramtab>

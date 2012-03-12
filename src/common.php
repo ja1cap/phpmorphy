@@ -39,7 +39,7 @@ class phpMorphy_FilesBundle {
         $lang;
 
     function phpMorphy_FilesBundle($dirName, $lang) {
-        $this->dir = rtrim($dirName, '/\\' . DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        $this->dir = rtrim($dirName, "\\/" . DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
         $this->setLang($lang);
     }
 
@@ -63,6 +63,14 @@ class phpMorphy_FilesBundle {
         return $this->genFileName('morph_data');
     }
     
+    function getGramInfoAncodesCacheFile() {
+        return $this->genFileName('morph_data_ancodes_cache');
+    }
+
+    function getAncodesMapFile() {
+        return $this->genFileName('morph_data_ancodes_map');
+    }
+
     function getGramTabFile() {
         return $this->genFileName('gramtab');
     }
@@ -89,23 +97,23 @@ class phpMorphy_FilesBundle {
 };
 
 class phpMorphy_WordDescriptor_Collection_Serializer {
-    function serialize(phpMorphy_WordDescriptor_Collection $collection) {
+    function serialize(phpMorphy_WordDescriptor_Collection $collection, $asText) {
         $result = array();
         
         foreach($collection as $descriptor) {
-            $result[] = $this->processWordDescriptor($descriptor);
+            $result[] = $this->processWordDescriptor($descriptor, $asText);
         }
         
         return $result;
     }
     
-    protected function processWordDescriptor(phpMorphy_WordDescriptor $descriptor) {
+    protected function processWordDescriptor(phpMorphy_WordDescriptor $descriptor, $asText) {
         $forms = array();
         $all = array();
         
         foreach($descriptor as $word_form) {
             $forms[] = $word_form->getWord();
-            $all[] = $this->serializeGramInfo($word_form);
+            $all[] = $this->serializeGramInfo($word_form, $asText);
         }
         
         return array(
@@ -115,12 +123,23 @@ class phpMorphy_WordDescriptor_Collection_Serializer {
         );
     }
     
-    protected function serializeGramInfo(phpMorphy_WordForm $wordForm) {
-        return $wordForm->getPartOfSpeech() . ' ' . implode(',', $wordForm->getGrammems());
+    protected function serializeGramInfo(phpMorphy_WordForm $wordForm, $asText) {
+        if($asText) {
+            return $wordForm->getPartOfSpeech() . ' ' . implode(',', $wordForm->getGrammems());
+        } else {
+            return array(
+                'pos' => $wordForm->getPartOfSpeech(),
+                'grammems' => $wordForm->getGrammems()
+            );
+        }
     }
 }
 
 class phpMorphy {
+    const RESOLVE_ANCODES_AS_TEXT = 0;
+    const RESOLVE_ANCODES_AS_DIALING = 1;
+    const RESOLVE_ANCODES_AS_INT = 2;
+
     const NORMAL = 0;
     const IGNORE_PREDICT = 2;
     const ONLY_PREDICT = 3;
@@ -130,21 +149,21 @@ class phpMorphy {
     const PREDICT_BY_DB = 'by_db';
     
     protected
-        $__storage_factory,
-        $__common_fsa,
-        $__common_source,
-        $__predict_fsa,
-        $__options,
+        $storage_factory,
+        $common_fsa,
+        $common_source,
+        $predict_fsa,
+        $options,
 
-        // this variables uses lazy paradigm, i.e. initialized at first time access
+        // variables with two underscores uses lazy paradigm, i.e. initialized at first time access
         //$__common_morphier,
         //$__predict_by_suf_morphier,
         //$__predict_by_db_morphier,
         //$__bulk_morphier,
         //$__word_descriptor_serializer,
 
-        $__helper,
-        $__last_prediction_type
+        $helper,
+        $last_prediction_type
         ;
     
     function __construct($dir, $lang = null, $options = array()) {
@@ -157,7 +176,7 @@ class phpMorphy {
             $this->initNewStyle($this->createFilesBundle($dir, $lang), $options);
         }
         
-        $this->__last_prediction_type = self::PREDICT_BY_NONE;
+        $this->last_prediction_type = self::PREDICT_BY_NONE;
     }
     
     /**
@@ -192,32 +211,32 @@ class phpMorphy {
     * @return string
     */
     function getEncoding() {
-        return $this->__helper->getGramInfo()->getEncoding();
+        return $this->helper->getGramInfo()->getEncoding();
     }
     
     /**
     * @return string
     */
     function getLocale() {
-        return $this->__helper->getGramInfo()->getLocale();
+        return $this->helper->getGramInfo()->getLocale();
     }
     
     /**
     * @return phpMorphy_Shm_Cache
     */
     function getShmCache() {
-        return $this->__storage_factory->getShmCache();
+        return $this->storage_factory->getShmCache();
     }
     
     /**
     * @return bool
     */
     function isLastPredicted() {
-        return self::PREDICT_BY_NONE !== $this->__last_prediction_type;
+        return self::PREDICT_BY_NONE !== $this->last_prediction_type;
     }
     
     function getLastPredictionType() {
-        return $this->__last_prediction_type;
+        return $this->last_prediction_type;
     }
     
     /**
@@ -291,17 +310,28 @@ class phpMorphy {
     * @param mixed $type - prediction managment
     * @return array
     */
-    function getAllFormsWithGramInfo($word, $type = self::NORMAL) {
+    function getAllFormsWithAncodes($word, $type = self::NORMAL) {
+        return $this->invoke('getAllFormsWithAncodes', $word, $type);
+    }
+    
+    /**
+    * @param mixed $word - string or array of strings
+    * @param mixed $type - prediction managment
+    * @return array
+    */
+    function getAllFormsWithGramInfo($word, $asText = true, $type = self::NORMAL) {
         if(false === ($result = $this->findWord($word, $type))) {
             return false;
         }
+        
+        $asText = (bool)$asText;
         
         if(is_array($word)) {
             $out = array();
             
             foreach($result as $w => $r) {
                 if(false !== $r) {
-                    $out[$w] = $this->processWordsCollection($r);
+                    $out[$w] = $this->processWordsCollection($r, $asText);
                 } else {
                     $out[$w] = false;
                 }
@@ -309,19 +339,109 @@ class phpMorphy {
             
             return $out;
         } else {
-            return $this->processWordsCollection($result);
+            return $this->processWordsCollection($result, $asText);
         }
     }
+
+    /**
+    * @param mixed $word - string or array of strings
+    * @param mixed $type - prediction managment
+    * @return array
+    */
+    function getAncode($word, $type = self::NORMAL) {
+        return $this->invoke('getAncode', $word, $type);
+    }
     
+    /**
+    * @param mixed $word - string or array of strings
+    * @param mixed $type - prediction managment
+    * @return array
+    */
+    function getGramInfo($word, $type = self::NORMAL) {
+        return $this->invoke('getGrammarInfo', $word, $type);
+    }
+    
+    /**
+    * @param mixed $word - string or array of strings
+    * @param mixed $type - prediction managment
+    * @return array
+    */
+    function getGramInfoMergeForms($word, $type = self::NORMAL) {
+        return $this->invoke('getGrammarInfoMergeForms', $word, $type);
+    }
+    
+    protected function getAnnotForWord($word) {
+        if(false === ($annots = $this->__common_morphier->getAnnot($word))) {
+            if($type !== self::IGNORE_PREDICT) {
+                return $this->predictWord('getAnnot', $word);
+            }
+        } else {
+            return $annots;
+        }
+        
+        return false;
+    }
+    
+    /**
+    * @param string $word
+    * @param mixed $partOfSpeech
+    * @param array $grammems
+    * @param mixed $type
+    * @param bool $returnOnlyWord
+    * @param mixed $callback
+    * @return array
+    */
+    function castFormByGramInfo($word, $partOfSpeech, $grammems, $returnOnlyWord = false, $callback = null, $type = self::NORMAL) {
+        if(false === ($annot = $this->getAnnotForWord($word))) {
+            return false;
+        }
+        
+        return $this->helper->castFormByGramInfo($word, $annot, $partOfSpeech, $grammems, $returnOnlyWord, $callback);
+    }
+    
+    /**
+    * @param string $word
+    * @param string $patternWord
+    * @param mixed $type
+    * @param bool $returnOnlyWord
+    * @param mixed $callback
+    * @return array
+    */
+    function castFormByPattern($word, $patternWord, $returnOnlyWord = false, $callback = null, $type = self::NORMAL) {
+        if(false === ($word_annot = $this->getAnnotForWord($word))) {
+            return false;
+        }
+        
+        $result = array();
+
+        foreach($this->getGrammarInfo($patternWord, $type) as $paradigm) {
+            foreach($paradigm as $grammar) {
+                $res = $this->helper->castFormByGramInfo(
+                    $word,
+                    $word_annot,
+                    $grammar['pos'],
+                    $grammar['grammems'],
+                    $returnWords,
+                    $callback
+                );
+
+                if(count($res)) {
+                    $result = array_merge($result, $res);
+                }
+            }
+        }
+        
+        return $result;
+    }
     
     // public interface end
     
-    protected function processWordsCollection(phpMorphy_WordDescriptor_Collection $collection) {
-        return $this->__word_descriptor_serializer->serialize($collection);
+    protected function processWordsCollection(phpMorphy_WordDescriptor_Collection $collection, $asText) {
+        return $this->__word_descriptor_serializer->serialize($collection, $asText);
     }
     
     protected function invoke($method, $word, $type) {
-        $this->__last_prediction_type = self::PREDICT_BY_NONE;
+        $this->last_prediction_type = self::PREDICT_BY_NONE;
         
         if($type === self::ONLY_PREDICT) {
             if(is_array($word)) {
@@ -338,11 +458,11 @@ class phpMorphy {
         }
         
         if(is_array($word)) {
-            $not_found = array();
-            
-            $result = $this->__bulk_morphier->$method($word, $not_found);
+            $result = $this->__bulk_morphier->$method($word);
             
             if($type !== self::IGNORE_PREDICT) {
+                $not_found = $this->__bulk_morphier->getNotFoundWords();
+                
                 for($i = 0, $c = count($not_found); $i < $c; $i++) {
                     $word = $not_found[$i];
                     
@@ -368,13 +488,13 @@ class phpMorphy {
     
     protected function predictWord($method, $word) {
         if(false !== ($result = $this->__predict_by_suf_morphier->$method($word))) {
-            $this->__last_prediction_type = self::PREDICT_BY_SUFFIX;
+            $this->last_prediction_type = self::PREDICT_BY_SUFFIX;
             
             return $result;
         }
         
         if(false !== ($result = $this->__predict_by_db_morphier->$method($word))) {
-            $this->__last_prediction_type = self::PREDICT_BY_DB;
+            $this->last_prediction_type = self::PREDICT_BY_DB;
             
             return $result;
         }
@@ -386,15 +506,15 @@ class phpMorphy {
     // init code
     ////////////////
     protected function initNewStyle(phpMorphy_FilesBundle $bundle, $options) {
-        $this->__options = $options = $this->repairOptions($options);
+        $this->options = $options = $this->repairOptions($options);
         $storage_type = $options['storage'];
         
-        $storage_factory = $this->__storage_factory = $this->createStorageFactory($options['shm']);
+        $storage_factory = $this->storage_factory = $this->createStorageFactory($options['shm']);
         $graminfo_as_text = $this->options['graminfo_as_text'];
         
         // fsa
-        $this->__common_fsa = $this->createFsa($storage_factory->open($storage_type, $bundle->getCommonAutomatFile(), false), false); // lazy
-        $this->__predict_fsa = $this->createFsa($storage_factory->open($storage_type, $bundle->getPredictAutomatFile(), true), true);  // lazy
+        $this->common_fsa = $this->createFsa($storage_factory->open($storage_type, $bundle->getCommonAutomatFile(), false), false); // lazy
+        $this->predict_fsa = $this->createFsa($storage_factory->open($storage_type, $bundle->getPredictAutomatFile(), true), true);  // lazy
 
         // graminfo
         $graminfo = $this->createGramInfo($storage_factory->open($storage_type, $bundle->getGramInfoFile(), true), $bundle); // lazy
@@ -411,7 +531,7 @@ class phpMorphy {
         // common source
         //$this->__common_source = $this->createCommonSource($bundle, $this->options['common_source']);
         
-        $this->__helper = $this->createMorphierHelper($graminfo, $gramtab, $graminfo_as_text);
+        $this->helper = $this->createMorphierHelper($graminfo, $gramtab, $graminfo_as_text, $bundle);
     }
     
     protected function createCommonSource(phpMorphy_FilesBundle $bundle, $opts) {
@@ -419,7 +539,7 @@ class phpMorphy {
         
         switch($type) {
             case PHPMORPHY_SOURCE_FSA:
-                return new phpMorphy_Source_Fsa($this->__common_fsa);
+                return new phpMorphy_Source_Fsa($this->common_fsa);
             case PHPMORPHY_SOURCE_DBA:
                 return new phpMorphy_Source_Dba(
                     $bundle->getDbaFile($this->getDbaHandlerName(@$opts['opts']['handler'])),
@@ -478,6 +598,8 @@ class phpMorphy {
             'common_source' => $this->repairSourceOptions(@$options['common_source']),
             'predict_by_suffix' => true,
             'predict_by_db' => true,
+            'use_ancodes_cache' => false,
+            'resolve_ancodes' => self::RESOLVE_ANCODES_AS_TEXT
         );
         
         return (array)$options + $defaults;
@@ -487,29 +609,29 @@ class phpMorphy {
         switch($name) {
             case '__predict_by_db_morphier':
                 $this->__predict_by_db_morphier = $this->createPredictByDbMorphier(
-                    $this->__predict_fsa,
-                    $this->__helper
+                    $this->predict_fsa,
+                    $this->helper
                 );
                 
                 break;
             case '__predict_by_suf_morphier':
                 $this->__predict_by_suf_morphier = $this->createPredictBySuffixMorphier(
-                    $this->__common_fsa,
-                    $this->__helper
+                    $this->common_fsa,
+                    $this->helper
                 );
                 
                 break;
             case '__bulk_morphier':
                 $this->__bulk_morphier = $this->createBulkMorphier(
-                    $this->__common_fsa,
-                    $this->__helper
+                    $this->common_fsa,
+                    $this->helper
                 );
                 
                 break;
             case '__common_morphier':
                 $this->__common_morphier = $this->createCommonMorphier(
-                    $this->__common_fsa,
-                    $this->__helper
+                    $this->common_fsa,
+                    $this->helper
                 );
                 
                 break;
@@ -543,24 +665,85 @@ class phpMorphy {
         return phpMorphy_Fsa::create($storage, $lazy);
     }
     
-    protected function createGramInfo(phpMorphy_Storage $storage, phpMorphy_FilesBundle $bundle) {
+    protected function createGramInfo(phpMorphy_Storage $graminfoFile, phpMorphy_FilesBundle $bundle) {
         //return new phpMorphy_GramInfo_RuntimeCaching(new phpMorphy_GramInfo_Proxy($storage));
         //return new phpMorphy_GramInfo_RuntimeCaching(phpMorphy_GramInfo::create($storage, false));
         
-        return new phpMorphy_GramInfo_RuntimeCaching(
+        $result = new phpMorphy_GramInfo_RuntimeCaching(
             new phpMorphy_GramInfo_Proxy_WithHeader(
-                $storage,
+                $graminfoFile,
                 $bundle->getGramInfoHeaderCacheFile()
             )
         );
+
+        if($this->options['use_ancodes_cache']) {
+            return new phpMorphy_GramInfo_AncodeCache(
+                $result,
+                $this->storage_factory->open(
+                    $this->options['storage'],
+                    $bundle->getGramInfoAncodesCacheFile(),
+                    true
+                ) // always lazy open
+            );
+        } else {
+            return $result;
+        }
     }
     
     protected function createGramTab(phpMorphy_Storage $storage) {
         return new phpMorphy_GramTab_Proxy($storage);
     }
-    
-    protected function createMorphierHelper(phpMorphy_GramInfo_Interace $graminfo, phpMorphy_GramTab_Interface $gramtab, $resolvePartOfSpeech) {
-        return new phpMorphy_Morphier_Helper($graminfo, $gramtab, $resolvePartOfSpeech);
+
+    protected function createAncodesResolverInternal(phpMorphy_GramTab_Interface $gramtab, phpMorphy_FilesBundle $bundle) {
+        switch($this->options['resolve_ancodes']) {
+            case self::RESOLVE_ANCODES_AS_TEXT:
+                return array(
+                    'phpMorphy_AncodesResolver_ToText',
+                    array($gramtab)
+                );
+            case self::RESOLVE_ANCODES_AS_INT:
+                return array(
+                    'phpMorphy_AncodesResolver_AsIs',
+                    array()
+                );
+            case self::RESOLVE_ANCODES_AS_DIALING:
+                return array(
+                    'phpMorphy_AncodesResolver_ToDialingAncodes',
+                    array(
+                        $this->storage_factory->open(
+                            $this->options['storage'],
+                            $bundle->getAncodesMapFile(),
+                            true
+                        ) // always lazy open
+                    )
+                );
+            default:
+                throw new phpMorphy_Exception("Invalid resolve_ancodes option, valid values are RESOLVE_ANCODES_AS_DIALING, RESOLVE_ANCODES_AS_INT, RESOLVE_ANCODES_AS_TEXT");
+        }
+    }
+
+    protected function createAncodesResolver(phpMorphy_GramTab_Interface $gramtab, phpMorphy_FilesBundle $bundle, $lazy) {
+        $result = $this->createAncodesResolverInternal($gramtab, $bundle);
+
+        if($lazy) {
+            return new phpMorphy_AncodesResolver_Proxy($result[0], $result[1]);
+        } else {
+            return phpMorphy_AncodesResolver_Proxy::instantinate($result[0], $result[1]);
+        }
+    }
+        
+    protected function createMorphierHelper(
+        phpMorphy_GramInfo_Interace $graminfo,
+        phpMorphy_GramTab_Interface $gramtab,
+        $graminfoAsText,
+        phpMorphy_FilesBundle $bundle
+    ) {
+        return new phpMorphy_Morphier_Helper(
+            $graminfo,
+            $gramtab,
+            $this->createAncodesResolver($gramtab, $bundle, true),
+            $graminfoAsText
+        );
     }
     
     protected function createCommonMorphier(phpMorphy_Fsa_Interface $fsa, phpMorphy_Morphier_Helper $helper) {
@@ -568,12 +751,11 @@ class phpMorphy {
     }
     
     protected function createBulkMorphier(phpMorphy_Fsa_Interface $fsa, phpMorphy_Morphier_Helper $helper) {
-        if($this->__options)
         return new phpMorphy_Morphier_Bulk($fsa, $helper);
     }
     
     protected function createPredictByDbMorphier(phpMorphy_Fsa_Interface $fsa, phpMorphy_Morphier_Helper $helper) {
-        if($this->__options['predict_by_db']) {
+        if($this->options['predict_by_db']) {
                 return new phpMorphy_Morphier_Predict_Database($fsa, $helper);
         } else {
             return new phpMorphy_Morphier_Empty();
@@ -581,7 +763,7 @@ class phpMorphy {
     }
     
     protected function createPredictBySuffixMorphier(phpMorphy_Fsa_Interface $fsa, phpMorphy_Morphier_Helper $helper) {
-        if($this->__options['predict_by_suffix']) {
+        if($this->options['predict_by_suffix']) {
             return new phpMorphy_Morphier_Predict_Suffix($fsa, $helper);
         } else {
             return new phpMorphy_Morphier_Empty();

@@ -27,20 +27,31 @@ require_once(PHPMORPHY_DIR . '/unicode.php');
 // Morphier interface
 // ----------------------------
 interface phpMorphy_Morphier_Interface {
+    function getAnnot($word);
     function getBaseForm($word);
     function getAllForms($word);
     function getPseudoRoot($word);
     function getPartOfSpeech($word);
     function getWordDescriptor($word);
+    function getAllFormsWithAncodes($word);
+    function getAncode($word);
+    function getGrammarInfoMergeForms($word);
+    function getGrammarInfo($word);
 }
 
 class phpMorphy_Morphier_Empty implements phpMorphy_Morphier_Interface {
+    function getAnnot($word) { return false; }
     function getBaseForm($word) { return false; }
     function getAllForms($word) { return false; }
     function getAllFormsWithGramInfo($word) { return false; }
     function getPseudoRoot($word) { return false; }
     function getPartOfSpeech($word) { return false; }
     function getWordDescriptor($word) { return false; }
+    function getAllFormsWithAncodes($word) { return false; }
+    function getAncode($word) { return false; }
+    function getGrammarInfoMergeForms($word) { return false; }
+    function getGrammarInfo($word) { return false; }
+    function castFormByGramInfo($word, $partOfSpeech, $grammems, $returnWords = false, $callback = null) { return false; }
 }
 
 // ----------------------------
@@ -68,6 +79,10 @@ abstract class phpMorphy_AnnotDecoder_Base implements phpMorphy_AnnotDecoder_Int
     abstract protected function getUnpackBlockSize();
 
     function decode($annotRaw, $withBase) {
+        if(empty($annotRaw)) {
+            throw new phpMorphy_Exception("Empty annot given");
+        }
+
         $unpack_str = $this->unpack_str;
         $unpack_size = $this->block_size;
         
@@ -174,6 +189,121 @@ class phpMorphy_AnnotDecoder_Factory {
     }
 }
 
+interface phpMorphy_AncodesResolver_Interface {
+    function resolve($ancodeId);
+    function unresolve($ancode);
+}
+
+class phpMorphy_AncodesResolver_Proxy implements phpMorphy_AncodesResolver_Interface {
+    protected 
+        $args, $class;
+        //$__obj;
+
+
+    function __construct($class, $ctorArgs) {
+        $this->class = $class;
+        $this->args = $ctorArgs;
+    }
+
+    function unresolve($ancode) {
+        return $this->__obj->unresolve($ancode);
+    }
+
+    function resolve($ancodeId) {
+        return $this->__obj->resolve($ancodeId);
+    }
+
+    static function instantinate($class, $args) {
+        $ref = new ReflectionClass($class);
+        return $ref->newInstanceArgs($args);
+    }
+
+    function __get($propName) {
+        if($propName === '__obj') {
+            $this->__obj = $this->instantinate($this->class, $this->args);
+
+            unset($this->args);
+            unset($this->class);
+
+            return $this->__obj;
+        }
+        
+        throw new phpMorphy_Exception("Unknown '$propName' property");
+    }
+}
+
+class phpMorphy_AncodesResolver_ToText implements phpMorphy_AncodesResolver_Interface {
+    protected $gramtab;
+
+    function __construct(phpMorphy_GramTab_Interface $gramtab) {
+        $this->gramtab = $gramtab;
+    }
+
+    function resolve($ancodeId) {
+        if(!isset($ancodeId)) {
+            return null;
+        }
+
+        return $this->gramtab->ancodeToString($ancodeId);
+    }
+
+    function unresolve($ancode) {
+        throw new phpMorphy_Exception("Can`t convert grammar info in text into ancode id");
+    }
+}
+
+class phpMorphy_AncodesResolver_ToDialingAncodes implements phpMorphy_AncodesResolver_Interface {
+    protected
+        $ancodes_map,
+        $reverse_map;
+    
+    function __construct(phpMorphy_Storage $ancodesMap) {
+        if(false === ($this->ancodes_map = unserialize($ancodesMap->read(0, $ancodesMap->getFileSize())))) {
+            throw new phpMorphy_Exception("Can`t open phpMorphy => Dialing ancodes map");
+        }
+
+        $this->reverse_map = array_flip($this->ancodes_map);
+    }
+
+    function unresolve($ancode) {
+        if(!isset($ancode)) {
+            return null;
+        }
+
+        if(!isset($this->reverse_map[$ancode])) {
+            throw new phpMorphy_Exception("Unknwon ancode found '$ancode'");
+        }
+
+        return $this->reverse_map[$ancode];
+    }
+
+    function resolve($ancodeId) {
+        if(!isset($ancodeId)) {
+            return null;
+        }
+
+        if(!isset($this->ancodes_map[$ancodeId])) {
+            throw new phpMorphy_Exception("Unknwon ancode id found '$ancodeId'");
+        }
+
+        return $this->ancodes_map[$ancodeId];
+    }
+}
+
+class phpMorphy_AncodesResolver_AsIs implements phpMorphy_AncodesResolver_Interface {
+    // This ctor for ReflectionClass::newInstanceArgs($args) with $args = array()
+    function __construct() {
+    }
+
+    function resolve($ancodeId) {
+        return $ancodeId;
+    }
+
+    function unresolve($ancode) {
+        return $ancode;
+    }
+}
+
 // ----------------------------
 // Helper
 // ----------------------------
@@ -184,12 +314,20 @@ class phpMorphy_Morphier_Helper {
         $char_size,
         $ends,
         $gramtab,
+        $ancodes_resolver,
+        $gramtab_consts_included = false,
         $resolve_pos;
     
-    function __construct(phpMorphy_GramInfo_Interace $graminfo, phpMorphy_GramTab_Interface $gramtab, $resolvePartOfSpeech) {
+    function __construct(
+        phpMorphy_GramInfo_Interace $graminfo,
+        phpMorphy_GramTab_Interface $gramtab,
+        phpMorphy_AncodesResolver_Interface $ancodesResolver,
+        $resolvePartOfSpeech
+    ) {
         $this->graminfo = $graminfo;
         $this->gramtab = $gramtab;
         $this->resolve_pos = (bool)$resolvePartOfSpeech;
+        $this->ancodes_resolver = $ancodesResolver;
         
         $this->char_size = $graminfo->getCharSize();
 
@@ -215,6 +353,10 @@ class phpMorphy_Morphier_Helper {
 
     function getAnnotDecoder() {
         return $this->annot_decoder;
+    }
+    
+    function getAncodesResolver() {
+        return $this->ancodes_resolver;
     }
 
     function getGramInfo() {
@@ -244,6 +386,31 @@ class phpMorphy_Morphier_Helper {
             $this->gramtab->getGrammems($ancodeId)
         );
     }
+
+    function extractPartOfSpeech($annot) {
+        if($this->resolve_pos) {
+            return $this->resolvePartOfSpeech($annot['pos_id']);
+        } else {
+            return $annot['pos_id'];
+        }
+    }
+
+    protected function includeGramTabConsts() {
+        if($this->isResolvePartOfSpeech()) {
+            $this->gramtab->includeConsts();
+        }
+        
+        $this->gramtab_consts_included = true;
+    }
+    
+    // getters
+    function getWordDescriptor($word, $annots) {
+        if(!$this->gramtab_consts_included) {
+            $this->includeGramTabConsts();
+        }
+        
+        return new phpMorphy_WordDescriptor_Collection($word, $annots, $this);
+    }
     
     protected function getBaseAndPrefix($word, $cplen, $plen, $flen) {
         if($flen) {
@@ -259,14 +426,6 @@ class phpMorphy_Morphier_Helper {
         $prefix = $cplen ? substr($word, 0, $cplen) : '';
         
         return array($base, $prefix);
-    }
-    
-    function extractPartOfSpeech($annot) {
-        if($this->resolve_pos) {
-            return $this->resolvePartOfSpeech($annot['pos_id']);
-        } else {
-            return $annot['pos_id'];
-        }
     }
     
     function getPartOfSpeech($word, $annots) {
@@ -325,7 +484,170 @@ class phpMorphy_Morphier_Helper {
         
         return $this->composeForms($word, $annots);
     }
-    
+
+    function castFormByGramInfo($word, $annots, $partOfSpeech, $grammems, $returnWords = false, $callback = null) {
+        if(false === $annots) {
+            return false;
+        }
+
+        $result = array();
+        $grammems = (array)$grammems;
+        $partOfSpeech = isset($partOfSpeech) ? (string)$partOfSpeech : null;
+        
+        foreach($this->decodeAnnot($annots, false) as $annot) {
+            $all_ancodes = $this->graminfo->readAncodes($annot);
+            $flexias = $this->graminfo->readFlexiaData($annot);
+            $common_ancode = $annot['common_ancode'];
+            $common_grammems = isset($common_ancode) ? $this->gramtab->getGrammems($common_ancode) : array();
+
+            list($base, $prefix) = $this->getBaseAndPrefix(
+                $word,
+                $annot['cplen'],
+                $annot['plen'],
+                $annot['flen']
+            );
+
+            // i use strange $form_no handling for perfomance issue (no function call overhead)
+            $i = 0;
+            $form_no = 0;
+            foreach($all_ancodes as $form_ancodes) {
+                foreach($form_ancodes as $ancode) {
+                    $form_pos = $this->gramtab->getPartOfSpeech($ancode);
+                    $form_grammems = array_merge($this->gramtab->getGrammems($ancode), $common_grammems);
+                    $form = $prefix . $flexias[$i] . $base . $flexias[$i + 1];
+
+                    if(isset($callback)) {
+                        if(!call_user_func($callback, $form, $form_pos, $form_grammems, $form_no)) {
+                            $form_no++;
+                            continue;
+                        }
+                    } else {
+                        if(isset($partOfSpeech) && $form_pos !== $partOfSpeech) {
+                            $form_no++;
+                            continue;
+                        }
+                        
+                        if(count(array_diff($grammems, $form_grammems)) > 0) {
+                            $form_no++;
+                            continue;
+                        }
+                    }
+
+                    if($returnWords) {
+                        $result[] = $form;
+                    } else {
+                        $result[] = array(
+                            'form' => $form,
+                            'form_no' => $form_no,
+                            'pos' => $form_pos,
+                            'grammems' => $form_grammems
+                        );
+                    }
+
+                    $form_no++;
+                }
+
+                $i += 2;
+            }
+        }
+
+        return $result;
+    }
+
+    function getAncode($annots) {
+        if(false === $annots) {
+            return false;
+        }
+        
+        $result = array();
+
+        foreach($this->decodeAnnot($annots, false) as $annot) {
+            $all_ancodes = $this->graminfo->readAncodes($annot);
+
+            $result[] = array(
+                'common' => $this->ancodes_resolver->resolve($annot['common_ancode']),
+                'all' => array_map(
+                    array($this->ancodes_resolver, 'resolve'),
+                    $all_ancodes[$annot['form_no']]
+                )
+            );
+        }
+
+        return $result;
+    }
+
+    function getGrammarInfoMergeForms($annots) {
+        if(false === $annots) {
+            return false;
+        }
+        
+        $result = array();
+
+        foreach($this->decodeAnnot($annots, false) as $annot) {
+            $all_ancodes = $this->graminfo->readAncodes($annot);
+            $common_ancode = $annot['common_ancode'];
+            $grammems = isset($common_ancode) ? $this->gramtab->getGrammems($common_ancode) : array();
+
+            $forms_count = 0;
+            $form_no = $annot['form_no'];
+
+            foreach($all_ancodes[$form_no] as $ancode) {
+                $grammems = array_merge($grammems, $this->gramtab->getGrammems($ancode));
+                $forms_count++;
+            }
+
+            $result[] = array(
+                // part of speech identical across all joined forms
+                'pos' => $this->gramtab->getPartOfSpeech($ancode),
+                'grammems' => array_unique($grammems),
+                'forms_count' => $forms_count,
+                'form_no_low' => $form_no,
+                'form_no_high' => $form_no + $forms_count,
+            );
+        }
+
+        return $result;
+    }
+
+    function getGrammarInfo($annots) {
+        if(false === $annots) {
+            return false;
+        }
+        
+        $result = array();
+
+        foreach($this->decodeAnnot($annots, false) as $annot) {
+            $all_ancodes = $this->graminfo->readAncodes($annot);
+            $common_ancode = $annot['common_ancode'];
+            $common_grammems = isset($common_ancode) ? $this->gramtab->getGrammems($common_ancode) : array();
+
+            $info = array();
+
+            $form_no = $annot['form_no'];
+            foreach($all_ancodes[$form_no] as $ancode) {
+                $info[] = array(//$this->gramtab->toString($ancode, $common_ancode);
+                    'pos' => $this->gramtab->getPartOfSpeech($ancode),
+                    'grammems' => array_merge($common_grammems, $this->gramtab->getGrammems($ancode)),
+                    'form_no' => $form_no,
+                );
+            }
+
+            $result[] = $info;
+        }
+
+        return $result;
+    }
+
+    function getAllFormsWithResolvedAncodes($word, $annots, $resolveType = 'no_resolve') {
+        if(false === $annots) {
+            return false;
+        }
+        
+        $annots = $this->decodeAnnot($annots, false);
+        
+        return $this->composeFormsWithResolvedAncodes($word, $annots);
+    }
+
     function getAllFormsWithAncodes($word, $annots, &$foundFormNo = array()) {
         if(false === $annots) {
             return false;
@@ -394,6 +716,45 @@ class phpMorphy_Morphier_Helper {
         return array_keys($result);
     }
     
+    protected function composeFormsWithResolvedAncodes($word, $annots) {
+        $result = array();
+        
+        foreach($annots as $annotIdx => $annot) {
+            list($base, $prefix) = $this->getBaseAndPrefix(
+                $word,
+                $annot['cplen'],
+                $annot['plen'],
+                $annot['flen']
+            );
+            
+            $words = array();
+            $ancodes = array();
+            $common_ancode = $annot['common_ancode'];
+
+            // read flexia
+            $flexias = $this->graminfo->readFlexiaData($annot);
+            $all_ancodes = $this->graminfo->readAncodes($annot);
+
+            for($i = 0, $c = count($flexias); $i < $c; $i += 2) {
+                $form = $prefix . $flexias[$i] . $base . $flexias[$i + 1];
+
+                $current_ancodes = $all_ancodes[$i / 2];
+                foreach($current_ancodes as $ancode) {
+                    $words[] = $form;
+                    $ancodes[] = $this->ancodes_resolver->resolve($ancode);
+                }
+            }
+
+            $result[] = array(
+                'forms' => $words,
+                'common' => $this->ancodes_resolver->resolve($common_ancode),
+                'all' => $ancodes,
+            );
+        }
+        
+        return $result;
+    }
+
     protected function composeFormsWithAncodes($word, $annots, &$foundFormNo) {
         $result = array();
         
@@ -811,10 +1172,12 @@ class phpMorphy_Morphier_Finder_Common extends phpMorphy_Morphier_Finder_Base {
     }
 
     protected function doFindWord($word) {
-        if(false === ($result = $this->fsa->walk($this->root, $word, true)) || !$result['annot']) {
+        $result = $this->fsa->walk($this->root, $word);
+
+        if(!$result['result'] || null === $result['annot']) {
             return false;
         }
-        
+
         return $result['annot'];
     }
 }
@@ -1027,9 +1390,14 @@ class phpMorphy_Morphier_Finder_Predict_Databse extends phpMorphy_Morphier_Finde
 // ----------------------------
 abstract class phpMorphy_Morphier_Base implements phpMorphy_Morphier_Interface {
     protected
+        /**
+         * @var phpMorphy_Morphier_Finder_Interface
+         */
         $finder,
-        $helper,
-        $gramtab_consts_included = false;
+        /**
+         * @var phpMorphy_Morphier_Helper
+         */
+        $helper;
     
     function __construct(phpMorphy_Morphier_Finder_Interface $finder, phpMorphy_Morphier_Helper $helper) {
         $this->finder = $finder;
@@ -1038,28 +1406,26 @@ abstract class phpMorphy_Morphier_Base implements phpMorphy_Morphier_Interface {
         $this->helper->setAnnotDecoder($finder->getAnnotDecoder());
     }
     
+    /**
+     * @return phpMorphy_Morphier_Finder_Interface
+     */
     function getFinder() {
         return $this->finder;
     }
     
+    /**
+     * @return phpMorphy_Morphier_Helper
+     */
     function getHelper() {
         return $this->helper;
     }
     
-    protected function createWordDescriptor($word, $annots) {
-        if(!$this->gramtab_consts_included) {
-            $this->includeGramTabConsts();
+    function getAnnot($word) {
+        if(false === ($annots = $this->finder->findWord($word))) {
+            return false;
         }
         
-        return new phpMorphy_WordDescriptor_Collection($word, $annots, $this->helper);
-    }
-    
-    function includeGramTabConsts() {
-        if($this->helper->isResolvePartOfSpeech()) {
-            $this->helper->getGramTab()->includeConsts();
-        }
-        
-        $this->gramtab_consts_included = true;
+        return $this->helper->decodeAnnot($annots, true);
     }
     
     function getWordDescriptor($word) {
@@ -1067,7 +1433,15 @@ abstract class phpMorphy_Morphier_Base implements phpMorphy_Morphier_Interface {
             return false;
         }
         
-        return $this->createWordDescriptor($word, $annots, $this->helper);
+        return $this->helper->getWordDescriptor($word, $annots);
+    }
+
+    function getAllFormsWithAncodes($word) {
+        if(false === ($annots = $this->finder->findWord($word))) {
+            return false;
+        }
+        
+        return $this->helper->getAllFormsWithResolvedAncodes($word, $annots);
     }
 
     function getPartOfSpeech($word) {
@@ -1100,6 +1474,55 @@ abstract class phpMorphy_Morphier_Base implements phpMorphy_Morphier_Interface {
         }
 
         return $this->helper->getAllForms($word, $annots);
+    }
+
+    function getAncode($word) {
+        if(false === ($annots = $this->finder->findWord($word))) {
+            return false;
+        }
+
+        return $this->helper->getAncode($annots);
+    }
+    
+    function getGrammarInfo($word) {
+        if(false === ($annots = $this->finder->findWord($word))) {
+            return false;
+        }
+
+        return $this->helper->getGrammarInfo($annots);
+    }
+    
+    function getGrammarInfoMergeForms($word) {
+        if(false === ($annots = $this->finder->findWord($word))) {
+            return false;
+        }
+
+        return $this->helper->getGrammarInfoMergeForms($annots);
+    }
+    
+    function castFormByGramInfo($word, $partOfSpeech, $grammems, $returnOnlyWord = false, $callback = null) {
+        if(false === ($annots = $this->finder->findWord($word))) {
+            return false;
+        }
+
+        return $this->helper->castFormByGramInfo($word, $annots);
+    }
+    
+    function castFormByPattern($word, $patternWord, $returnOnlyWord = false, $callback = null) {
+        if(false === ($orig_annots = $this->finder->findWord($word))) {
+            return false;
+        }
+        
+        if(false === ($pattern_annots = $this->finder->findWord($patternWord))) {
+            return false;
+        }
+
+        return $this->helper->castFormByPattern(
+            $word, $orig_annots,
+            $patternWord, $pattern_annots,
+            $returnOnlyWord,
+            $callback
+        );
     }
 };
 
@@ -1157,11 +1580,12 @@ class phpMorphy_Morphier_Predict_Database extends phpMorphy_Morphier_Base {
     }
 }
 
-class phpMorphy_Morphier_Bulk {
+class phpMorphy_Morphier_Bulk implements phpMorphy_Morphier_Interface {
     protected
         $fsa,
         $root_trans,
         $helper,
+        $notfound = array(),
         $graminfo;
     
     function __construct(phpMorphy_Fsa_Interface $fsa, phpMorphy_Morphier_Helper $helper) {
@@ -1185,37 +1609,99 @@ class phpMorphy_Morphier_Bulk {
     function getGraminfo() {
         return $this->graminfo;
     }
+    
+    function getNotFoundWords() {
+        return $this->notfound;
+    }
 
     protected function createAnnotDecoder(phpMorphy_Morphier_Helper $helper) {
         return new phpMorphy_AnnotDecoder_Common($helper->getGramInfo()->getEnds());
     }
     
-    function getBaseForm($words, &$notfound) {
-        $annots = $this->findWord($words, $notfound);
+    function getAnnot($word) {
+        $result = array();
+        
+        foreach($this->findWord($word) as $annot => $words) {
+            $annot = $this->helper->decodeAnnot($annot, true);
+            
+            foreach($words as $word) {
+                $result[$word][] = $annot;
+            }
+        }
+        
+        return $result;
+    }
+    
+    function getBaseForm($words) {
+        $annots = $this->findWord($words);
         
         return $this->composeForms($annots, true, false, false);
     }
     
-    function getAllForms($words, &$notfound) {
-        $annots = $this->findWord($words, $notfound);
+    function getAllForms($words) {
+        $annots = $this->findWord($words);
         
         return $this->composeForms($annots, false, false, false);
     }
     
-    function getPseudoRoot($words, &$notfound) {
-        $annots = $this->findWord($words, $notfound);
+    function getPseudoRoot($words) {
+        $annots = $this->findWord($words);
         
         return $this->composeForms($annots, false, true, false);
     }
     
-    function getPartOfSpeech($words, &$notfound) {
-        $annots = $this->findWord($words, $notfound);
+    function getPartOfSpeech($words) {
+        $annots = $this->findWord($words);
         
         return $this->composeForms($annots, false, false, true);
     }
     
-    protected function findWord($words, &$notfound) {
+    protected function processAnnotsWithHelper($words, $method, $callWithWord = false) {
+        $result = array();
+        
+        foreach($this->findWord($words) as $annot_raw => $words) {
+            if(strlen($annot_raw) == 0) continue;
+            
+            if($callWithWord) {
+                foreach($words as $word) {
+                    $result[$word] = $this->helper->$method($word, $annot_raw);
+                }
+            } else {
+                $result_for_annot = $this->helper->$method($annot_raw);
+                
+                foreach($words as $word) {
+                    $result[$word] = $result_for_annot;
+                }
+            }
+        }
+        
+        return $result;
+    }
+    
+    function getAncode($words) {
+        return $this->processAnnotsWithHelper($words, 'getAncode');
+    }
+    
+    function getGrammarInfoMergeForms($words) {
+        return $this->processAnnotsWithHelper($words, 'getGrammarInfoMergeForms');
+    }
+    
+    function getGrammarInfo($words) {
+        return $this->processAnnotsWithHelper($words, 'getGrammarInfo');
+    }
+    
+    function getAllFormsWithAncodes($words) {
+        return $this->processAnnotsWithHelper($words, 'getAllFormsWithResolvedAncodes', true);
+    }
+    
+    function getWordDescriptor($word) {
+        return $this->processAnnotsWithHelper($words, 'getWordDescriptor', true);
+    }
+    
+    protected function findWord($words) {
         $unknown_words_annot = '';
+        
+        $this->notfound = array();
         
         list($labels, $finals, $dests) = $this->buildPatriciaTrie($words);
         
@@ -1253,7 +1739,7 @@ class phpMorphy_Morphier_Bulk {
                     $annots[$result['annot']][] = $path;
                 } else {
                     //$annots[$unknown_words_annot][] = $path;
-                    $notfound[] = $path;
+                    $this->notfound[] = $path;
                 }
             }
             
@@ -1331,6 +1817,10 @@ class phpMorphy_Morphier_Bulk {
     }
     
     protected function buildPatriciaTrie($words) {
+        if(!is_array($words)) {
+            throw new phpMorphy_Exception("Words must be array");
+        }
+        
         sort($words);
         
         $stack = array();

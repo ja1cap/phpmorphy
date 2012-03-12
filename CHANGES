@@ -1,3 +1,9 @@
+Changes with phpMorphy 0.3.5                                     31 Aug 2009
+    *) Add new methods getGramInfo, getGramInfoMergeForms, getAllFormsWithAncodes, castFormByGramInfo, castFormByPattern
+    *) getAllFormsWithGramInfo signature changed, second argument is (bool)$asText now
+    *) New initialization options: use_ancodes_cache, resolve_ancodes
+    *) Add ancodes cache
+    *) Add ability to use phpMorphy <=> Dialing ancode ids mapping
 Changes with phpMorphy 0.3.4                                     23 Aug 2009
     *) Fix bug in phpMorphy_WordForm::hasGrammems($grammems) when $grammems not array
     *) Fix bug in phpMorphy_Shm_Cache::openSegement(), throws exception with invalid  message

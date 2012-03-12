@@ -7,6 +7,17 @@ if($argc < 3) {
 
 require_once(dirname(__FILE__) . '/../src/common.php');
 
+$file = $argv[1];
+$out_dir = $argv[2];
+
+try {
+    extract_gramtab($file, $out_dir, true);
+    extract_gramtab($file, $out_dir, false);
+} catch (Exception $e) {
+    echo $e;
+    exit(1);
+}
+
 function replace_keys_with_name($map) {
     $result = array();
     
@@ -65,15 +76,4 @@ function extract_gramtab($graminfoFile, $outDir, $asText) {
     if(false === file_put_contents($out_file, serialize($result))) {
         throw new Exception("Can`t write '$out_file'");
     }
-}
-
-$file = $argv[1];
-$out_dir = $argv[2];
-
-try {
-    extract_gramtab($file, $out_dir, true);
-    extract_gramtab($file, $out_dir, false);
-} catch (Exception $e) {
-    echo $e;
-    exit(1);
 }

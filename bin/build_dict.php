@@ -23,8 +23,8 @@ function doExec($title, $file, $args) {
     $cmd = '';
     switch(strtolower($ext)) {
         case 'php':
-                    $cmd = PHP_BIN . ' -f ' . escapeshellarg($file) . ' --';
-                    break;
+            $cmd = PHP_BIN . ' -f ' . escapeshellarg($file) . ' --';
+            break;
         default:
             $cmd = escapeshellarg($file);
             
@@ -116,7 +116,7 @@ echo "Found '$locale' locale in $argv[1]\n";
 $args = array(
     '--xml' => $argv[1],
     '--out-dir' => $argv[2],
-    '--out-encoding' => $argv[3],
+    '--out-encoding2' => $argv[3],
     '--force-encoding-single-byte' => null,
     '--verbose' => null,
     '--case' => 'upper',
@@ -130,3 +130,4 @@ doExec('Build dictionary', MORPHY_BUILDER, $args);
 
 doExec('Extract gramtab', BIN_DIR . '/extract_gramtab.php', array($morph_data_file, $argv[2]));
 doExec('Extract graminfo header', BIN_DIR . '/extract_graminfo_header.php', array($morph_data_file, $argv[2]));
+doExec('Create ancodes cache', BIN_DIR . '/extract_ancodes.php', array($morph_data_file, $argv[2]));

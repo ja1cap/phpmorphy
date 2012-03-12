@@ -212,23 +212,6 @@ abstract class phpMorphy_Fsa implements phpMorphy_Fsa_Interface {
     abstract protected function readAlphabet();
 };
 
-class phpMorphy_Fsa_Decorator implements phpMorphy_Fsa_Interface {
-    //protected $fsa;
-    
-    function phpMorphy_Fsa_Decorator(phpMorphy_Fsa_Interface $fsa) {
-        $this->fsa = $fsa;
-    }
-    
-    function getRootTrans() { return $this->fsa->getRootTrans(); }
-    function getRootState() { return $this->fsa->getRootState(); }
-    function getAlphabet() { return $this->fsa->getAlphabet(); }
-    function getAnnot($trans) { return $this->fsa->getAnnot($trans); }
-    function walk($start, $word, $readAnnot = true) { return $this->fsa->walk($start, $word, $readAnnot); }
-    function collect($start, $callback, $readAnnot = true, $path = '') { return $this->fsa->collect($start, $callback, $readAnnot, $path); }
-    function readState($index) { return $this->fsa->readState($index); }
-    function unpackTranses($transes) { return $this->fsa->unpackTranses($transes); }
-};
-
 class phpMorphy_Fsa_WordsCollector {
     protected
         $items = array(),
@@ -252,11 +235,29 @@ class phpMorphy_Fsa_WordsCollector {
     function getCallback() { return array($this, 'collect'); }
 };
 
+class phpMorphy_Fsa_Decorator implements phpMorphy_Fsa_Interface {
+    protected $fsa;
+    
+    function phpMorphy_Fsa_Decorator(phpMorphy_Fsa_Interface $fsa) {
+        $this->fsa = $fsa;
+    }
+    
+    function getRootTrans() { return $this->fsa->getRootTrans(); }
+    function getRootState() { return $this->fsa->getRootState(); }
+    function getAlphabet() { return $this->fsa->getAlphabet(); }
+    function getAnnot($trans) { return $this->fsa->getAnnot($trans); }
+    function walk($start, $word, $readAnnot = true) { return $this->fsa->walk($start, $word, $readAnnot); }
+    function collect($start, $callback, $readAnnot = true, $path = '') { return $this->fsa->collect($start, $callback, $readAnnot, $path); }
+    function readState($index) { return $this->fsa->readState($index); }
+    function unpackTranses($transes) { return $this->fsa->unpackTranses($transes); }
+};
+
 class phpMorphy_Fsa_Proxy extends phpMorphy_Fsa_Decorator {
     protected $storage;
     
     function __construct(phpMorphy_Storage $storage) {
         $this->storage = $storage;
+        unset($this->fsa);
     }
     
     function __get($propName) {
