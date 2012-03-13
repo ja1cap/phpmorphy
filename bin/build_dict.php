@@ -11,7 +11,7 @@ if($argc < 4) {
 
 define('BIN_DIR', dirname(__FILE__));
 define('MORPHY_DIR', getenv('MORPHY_DIR'));
-define('MORPHY_BUILDER', MORPHY_DIR . '/bin/morphy_builder');
+define('MORPHY_BUILDER', MORPHY_DIR . '/bin/morphy_builder.exe');
 define('PHP_BIN', getenv('PHPRC') . '/php');
 
 function doError($msg) {
