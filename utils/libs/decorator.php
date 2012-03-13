@@ -215,11 +215,11 @@ class lmbReflectionHelper
     if($method == '__set')
       return 'function __set($key, $value)';
 
-    if(!is_callable(array($name, $method)))
-      return "function $method()";
-
     if(self :: _isInterfaceMethod($name, $method))
       return self :: _getFullSignature($name, $method);
+
+    if(!is_callable(array($name, $method)))
+      return "function $method()";
 
     return "function $method()";
   }
